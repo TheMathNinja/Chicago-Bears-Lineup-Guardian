@@ -29,7 +29,6 @@ export async function exportJson(season, type, params = {}, cookie) {
 
 export async function submitLineup({ season, leagueId, franchiseId, week, starterIds, cookie, comments = "Automated inactive-player protection" }) {
   const body = new URLSearchParams({
-    TYPE: "lineup",
     L: leagueId,
     W: String(week),
     STARTERS: starterIds.join(","),
@@ -37,7 +36,7 @@ export async function submitLineup({ season, leagueId, franchiseId, week, starte
     COMMENTS: comments,
     JSON: "1",
   });
-  const text = await request(`${BASE}/${season}/import`, { cookie, method: "POST", body });
+  const text = await request(`${BASE}/${season}/import?TYPE=lineup`, { cookie, method: "POST", body });
   let result;
   try { result = JSON.parse(text); } catch { result = { raw: text }; }
   if (/error/i.test(text)) throw new Error(`MFL rejected lineup: ${text.slice(0, 500)}`);
@@ -46,9 +45,9 @@ export async function submitLineup({ season, leagueId, franchiseId, week, starte
 
 export async function sendMflEmail({ season, leagueId, franchiseId, subject, message, cookie }) {
   const body = new URLSearchParams({
-    TYPE: "emailMessage", L: leagueId, SEND_TO: franchiseId,
+    L: leagueId, SEND_TO: franchiseId,
     SUBJECT: subject, BODY: message, JSON: "1",
   });
-  const text = await request(`${BASE}/${season}/import`, { cookie, method: "POST", body });
+  const text = await request(`${BASE}/${season}/import?TYPE=emailMessage`, { cookie, method: "POST", body });
   if (/error/i.test(text)) throw new Error(`MFL rejected notification email: ${text.slice(0, 500)}`);
 }
