@@ -1,21 +1,34 @@
 {
-  "events": [],
+  "events": [
+    {
+      "time": "2026-10-04T18:39:02.823Z",
+      "league": "ADL",
+      "action": "NO-OP SUBMISSION VERIFIED",
+      "detail": "21 unchanged Week 4 starters"
+    },
+    {
+      "time": "2026-10-04T18:39:02.823Z",
+      "league": "FAFL",
+      "action": "NO-OP SUBMISSION VERIFIED",
+      "detail": "21 unchanged Week 4 starters"
+    }
+  ],
   "leagues": [
     {
       "key": "ADL",
       "week": 4,
-      "checkedAt": "2026-10-04T18:33:17.346Z",
+      "checkedAt": "2026-10-04T18:39:02.823Z",
       "nextKickoff": "2026-10-04T20:05:00.000Z",
-      "status": "idle",
-      "message": "Outside the 90-minute monitoring window."
+      "status": "ok",
+      "message": "End-to-end submission verified with 21 unchanged starters."
     },
     {
       "key": "FAFL",
       "week": 4,
-      "checkedAt": "2026-10-04T18:33:17.346Z",
+      "checkedAt": "2026-10-04T18:39:02.823Z",
       "nextKickoff": "2026-10-04T20:05:00.000Z",
-      "status": "idle",
-      "message": "Outside the 90-minute monitoring window."
+      "status": "ok",
+      "message": "End-to-end submission verified with 21 unchanged starters."
     }
   ]
 }
