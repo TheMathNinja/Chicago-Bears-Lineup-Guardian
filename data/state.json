@@ -17,18 +17,18 @@
     {
       "key": "ADL",
       "week": 4,
-      "checkedAt": "2026-10-04T18:39:02.823Z",
-      "nextKickoff": "2026-10-04T20:05:00.000Z",
-      "status": "ok",
-      "message": "End-to-end submission verified with 21 unchanged starters."
+      "checkedAt": "2026-10-04T20:39:16.653Z",
+      "nextKickoff": "2026-10-05T00:20:00.000Z",
+      "status": "idle",
+      "message": "Outside the 90-minute monitoring window."
     },
     {
       "key": "FAFL",
       "week": 4,
-      "checkedAt": "2026-10-04T18:39:02.823Z",
-      "nextKickoff": "2026-10-04T20:05:00.000Z",
-      "status": "ok",
-      "message": "End-to-end submission verified with 21 unchanged starters."
+      "checkedAt": "2026-10-04T20:39:16.653Z",
+      "nextKickoff": "2026-10-05T00:20:00.000Z",
+      "status": "idle",
+      "message": "Outside the 90-minute monitoring window."
     }
   ]
 }
