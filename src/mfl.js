@@ -25,15 +25,20 @@ export async function login(season, username, password) {
   return encodeURIComponent(decoded);
 }
 
-export async function verifyLogin(season, cookie, expectedLeagueIds) {
+export async function verifyLogin(season, cookie, expectedLeagues) {
   const data = await exportJson(season, "myleagues", { YEAR: season, FRANCHISE_NAMES: "1" }, cookie);
   const leagues = data.myleagues?.league ?? data.leagues?.league ?? data.league;
-  const ids = new Set((Array.isArray(leagues) ? leagues : leagues ? [leagues] : [])
-    .map((league) => league.id ?? league.league_id ?? league.leagueId)
-    .filter(Boolean)
-    .map(String));
-  const missing = expectedLeagueIds.filter((id) => !ids.has(String(id)));
+  const memberships = (Array.isArray(leagues) ? leagues : leagues ? [leagues] : []).map((league) => ({
+    leagueId: String(league.id ?? league.league_id ?? league.leagueId ?? ""),
+    franchiseId: String(league.franchise_id ?? league.franchiseId ?? league.franchise?.id ?? ""),
+  }));
+  const ids = new Set(memberships.map((league) => league.leagueId).filter(Boolean));
+  const missing = expectedLeagues.map((league) => league.leagueId).filter((id) => !ids.has(String(id)));
   if (missing.length) throw new Error(`Authenticated MFL account cannot access league(s): ${missing.join(", ")}`);
+  console.log(`MFL memberships: ${expectedLeagues.map((expected) => {
+    const membership = memberships.find((league) => league.leagueId === String(expected.leagueId));
+    return `${expected.key}=${membership?.franchiseId || "no owner franchise returned"}`;
+  }).join("; ")}`);
 }
 
 export async function exportJson(season, type, params = {}, cookie) {
@@ -41,14 +46,13 @@ export async function exportJson(season, type, params = {}, cookie) {
   return JSON.parse(await request(`${BASE}/${season}/export?${query}`, { cookie }));
 }
 
-export async function submitLineup({ season, leagueId, franchiseId, week, starterIds, cookie, comments = "Automated inactive-player protection" }) {
+export async function submitLineup({ season, leagueId, franchiseId, week, starterIds, cookie }) {
   const query = new URLSearchParams({
     TYPE: "lineup",
     L: leagueId,
     W: String(week),
     STARTERS: starterIds.join(","),
     FRANCHISE_ID: franchiseId,
-    COMMENTS: comments,
     JSON: "1",
   });
   const text = await request(`${BASE}/${season}/import?${query}`, { cookie });
