@@ -15,6 +15,8 @@ The guardian polls during NFL game windows, identifies unavailable starters, and
 
 The GitHub schedule is a backup heartbeat. A Google Apps Script dispatcher should invoke this workflow on exact ten-minute boundaries; the worker exits immediately outside an active 90-minute game window.
 
+At 6:00 a.m. Eastern on the date of each week's first NFL game, a separate safety-net workflow checks MFL's week-specific submission stamp. If no manual submission exists, it builds, submits, reads back, and emails confirmation of the highest-projected legal lineup with no `O`, `IR`, `H`, `S`, or bye players.
+
 ## Required repository secrets
 
 - `MFL_USERNAME`
