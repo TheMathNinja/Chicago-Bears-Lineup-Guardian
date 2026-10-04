@@ -28,6 +28,7 @@ jobs:
       ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
       SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      RUN_MODE: monitor
       LIVE_LINEUP_WRITES: ${{ inputs.live || vars.LIVE_LINEUP_WRITES || 'false' }}
     steps:
       - uses: actions/checkout@v5
@@ -52,6 +53,7 @@ jobs:
         run: |
           git config user.name "adl-lineup-guardian[bot]"
           git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main
           git add data docs
           git diff --cached --quiet || git commit -m "Update lineup guardian audit"
           git push
