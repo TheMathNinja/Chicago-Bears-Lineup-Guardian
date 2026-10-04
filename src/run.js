@@ -2,7 +2,7 @@ import fs from "node:fs";
 import { dryRun, loadLeagues, lookaheadMinutes, requireCredentials, season } from "./config.js";
 import { writeDashboard } from "./dashboard.js";
 import { optimizeLineup, parseRules, validateLineup } from "./lineup-rules.js";
-import { exportJson, login, requestText, sendMflEmail, submitLineup } from "./mfl.js";
+import { exportJson, login, requestText, sendMflEmail, submitLineup, verifyLogin } from "./mfl.js";
 import { isUnavailable, normalizeStatus, rows } from "./normalize.js";
 import { isInitialLineupRunDue, lineupSubmissionStatus } from "./submission-status.js";
 
@@ -196,8 +196,10 @@ async function processLeague(league, cookie) {
 async function main() {
   const { username, password } = requireCredentials();
   const cookie = await login(season, username, password);
+  const leagues = loadLeagues();
+  await verifyLogin(season, cookie, leagues.map((league) => league.leagueId));
   const results = [];
-  for (const league of loadLeagues()) {
+  for (const league of leagues) {
     try { results.push(await processLeague(league, cookie)); }
     catch (error) {
       event(league.key, "ERROR", error.message);
