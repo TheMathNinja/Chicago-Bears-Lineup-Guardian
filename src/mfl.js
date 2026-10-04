@@ -46,13 +46,12 @@ export async function exportJson(season, type, params = {}, cookie) {
   return JSON.parse(await request(`${BASE}/${season}/export?${query}`, { cookie }));
 }
 
-export async function submitLineup({ season, leagueId, franchiseId, week, starterIds, cookie }) {
+export async function submitLineup({ season, leagueId, week, starterIds, cookie }) {
   const query = new URLSearchParams({
     TYPE: "lineup",
     L: leagueId,
     W: String(week),
     STARTERS: starterIds.join(","),
-    FRANCHISE_ID: franchiseId,
     JSON: "1",
   });
   const text = await request(`${BASE}/${season}/import?${query}`, { cookie });
