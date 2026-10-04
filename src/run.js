@@ -110,13 +110,13 @@ async function processInitialLineup(league, cookie, snapshot, pool, firstKickoff
   if (fresh.week !== snapshot.week || freshStatus.status !== "not_submitted") {
     throw new Error("Week or submission status changed during evaluation; refusing automatic initial submission");
   }
-  await submitLineup({ season, leagueId: league.leagueId, franchiseId: league.franchiseId, week: snapshot.week, starterIds: proposedIds, cookie });
+  await submitLineup({ season, webHost: league.webHost, leagueId: league.leagueId, week: snapshot.week, starterIds: proposedIds, cookie });
   const verified = await readLeague(league, cookie);
   const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
   if (verifiedIds.join(",") !== proposedIds.join(",")) throw new Error("MFL read-back did not match automatic initial lineup");
   event(league.key, "INITIAL LINEUP SUBMITTED", names);
   await sendMflEmail({
-    season, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
+    season, webHost: league.webHost, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
     subject: `[${league.key} Bears] Automatic Week ${snapshot.week} lineup submitted`,
     message: `No manual Week ${snapshot.week} lineup submission was recorded by 6:00 a.m. ET on the first NFL game day.\n\nThe lineup guardian submitted and verified the highest-projected legal lineup containing no MFL O, IR, H, S, or bye players.\n\n${names}`,
   });
@@ -145,7 +145,7 @@ async function processLeague(league, cookie) {
       throw new Error("Lineup or week changed during no-op verification; refusing write");
     }
     await submitLineup({
-      season, leagueId: league.leagueId, franchiseId: league.franchiseId, week: snapshot.week,
+      season, webHost: league.webHost, leagueId: league.leagueId, week: snapshot.week,
       starterIds: existingIds, cookie,
     });
     const verified = await readLeague(league, cookie);
@@ -180,13 +180,13 @@ async function processLeague(league, cookie) {
   if (fresh.week !== snapshot.week || freshStarters.join(",") !== currentStarterIds.sort().join(",")) {
     throw new Error("Lineup or week changed during evaluation; refusing stale write");
   }
-  await submitLineup({ season, leagueId: league.leagueId, franchiseId: league.franchiseId, week: snapshot.week, starterIds: proposedIds, cookie });
+  await submitLineup({ season, webHost: league.webHost, leagueId: league.leagueId, week: snapshot.week, starterIds: proposedIds, cookie });
   const verified = await readLeague(league, cookie);
   const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
   if (verifiedIds.join(",") !== proposedIds.join(",")) throw new Error("MFL read-back did not match submitted lineup");
   event(league.key, "LINEUP UPDATED", detail);
   await sendMflEmail({
-    season, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
+    season, webHost: league.webHost, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
     subject: `[${league.key} Bears] Automatic lineup protection applied`,
     message: `The lineup guardian made and verified this change for Week ${snapshot.week}:\n\n${detail}\n\nThe resulting 21-player lineup passed every league position and group constraint.`,
   });
@@ -206,7 +206,7 @@ async function main() {
       results.push({ key: league.key, status: "error", week: "?", checkedAt: now.toISOString(), message: error.message });
       try {
         await sendMflEmail({
-          season, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
+          season, webHost: league.webHost, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
           subject: `[${league.key} Bears] Lineup guardian needs attention`,
           message: `The lineup guardian refused to make a lineup change.\n\n${error.message}\n\nPlease inspect the lineup manually.`,
         });
