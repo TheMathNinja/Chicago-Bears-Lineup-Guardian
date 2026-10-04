@@ -27,13 +27,14 @@ export async function exportJson(season, type, params = {}, cookie) {
   return JSON.parse(await request(`${BASE}/${season}/export?${query}`, { cookie }));
 }
 
-export async function submitLineup({ season, leagueId, week, starterIds, cookie }) {
+export async function submitLineup({ season, leagueId, franchiseId, week, starterIds, cookie, comments = "Automated inactive-player protection" }) {
   const body = new URLSearchParams({
     TYPE: "lineup",
     L: leagueId,
     W: String(week),
     STARTERS: starterIds.join(","),
-    COMMENTS: "Automated inactive-player protection",
+    FRANCHISE_ID: franchiseId,
+    COMMENTS: comments,
     JSON: "1",
   });
   const text = await request(`${BASE}/${season}/import`, { cookie, method: "POST", body });
