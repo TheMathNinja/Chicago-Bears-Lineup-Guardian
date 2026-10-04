@@ -27,8 +27,11 @@ export async function login(season, username, password) {
 
 export async function verifyLogin(season, cookie, expectedLeagueIds) {
   const data = await exportJson(season, "myleagues", { YEAR: season, FRANCHISE_NAMES: "1" }, cookie);
-  const leagues = data.leagues?.league;
-  const ids = new Set((Array.isArray(leagues) ? leagues : leagues ? [leagues] : []).map((league) => String(league.id)));
+  const leagues = data.myleagues?.league ?? data.leagues?.league ?? data.league;
+  const ids = new Set((Array.isArray(leagues) ? leagues : leagues ? [leagues] : [])
+    .map((league) => league.id ?? league.league_id ?? league.leagueId)
+    .filter(Boolean)
+    .map(String));
   const missing = expectedLeagueIds.filter((id) => !ids.has(String(id)));
   if (missing.length) throw new Error(`Authenticated MFL account cannot access league(s): ${missing.join(", ")}`);
 }
