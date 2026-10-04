@@ -1,7 +1,21 @@
 {
   "events": [],
   "leagues": [
-    {"key":"ADL","status":"idle","week":"-","checkedAt":"Not run yet","message":"Awaiting first credentialed check."},
-    {"key":"FAFL","status":"idle","week":"-","checkedAt":"Not run yet","message":"Awaiting first credentialed check."}
+    {
+      "key": "ADL",
+      "week": 4,
+      "checkedAt": "2026-10-04T18:26:12.753Z",
+      "nextKickoff": "2026-10-04T20:05:00.000Z",
+      "status": "idle",
+      "message": "Outside the 90-minute monitoring window."
+    },
+    {
+      "key": "FAFL",
+      "week": 4,
+      "checkedAt": "2026-10-04T18:26:12.753Z",
+      "nextKickoff": "2026-10-04T20:05:00.000Z",
+      "status": "idle",
+      "message": "Outside the 90-minute monitoring window."
+    }
   ]
 }
