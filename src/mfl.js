@@ -15,11 +15,11 @@ export async function requestText(url, cookie) {
 }
 
 export async function login(season, username, password) {
-  const params = new URLSearchParams({ USERNAME: username, PASSWORD: password, JSON: "1" });
-  const data = JSON.parse(await request(`${BASE}/${season}/login`, { method: "POST", body: params }));
-  const cookie = data.MFL_USER_ID || data.login?.MFL_USER_ID;
-  if (!cookie) throw new Error(`MFL login failed: ${JSON.stringify(data).slice(0, 300)}`);
-  return cookie;
+  const params = new URLSearchParams({ USERNAME: username, PASSWORD: password, XML: "1" });
+  const text = await request(`${BASE}/${season}/login`, { method: "POST", body: params });
+  const match = text.match(/\bMFL_USER_ID=["']([^"']+)["']/i);
+  if (!match) throw new Error(`MFL login failed: ${text.slice(0, 300) || "empty response"}`);
+  return match[1];
 }
 
 export async function exportJson(season, type, params = {}, cookie) {
