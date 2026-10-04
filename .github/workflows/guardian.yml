@@ -35,8 +35,20 @@ jobs:
         with:
           node-version: 24
       - run: npm test
-      - run: npm run check
+      - name: Check configuration
+        id: configured
+        shell: bash
+        run: |
+          if [[ -n "$MFL_USERNAME" && -n "$MFL_PASSWORD" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Lineup Guardian is not credentialed yet; safely skipping the live-data worker."
+          fi
+      - if: steps.configured.outputs.ready == 'true'
+        run: npm run check
       - name: Commit audit state
+        if: steps.configured.outputs.ready == 'true'
         run: |
           git config user.name "adl-lineup-guardian[bot]"
           git config user.email "actions@users.noreply.github.com"
