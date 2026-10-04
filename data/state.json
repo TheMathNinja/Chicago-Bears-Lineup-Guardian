@@ -1,0 +1,7 @@
+{
+  "events": [],
+  "leagues": [
+    {"key":"ADL","status":"idle","week":"-","checkedAt":"Not run yet","message":"Awaiting first credentialed check."},
+    {"key":"FAFL","status":"idle","week":"-","checkedAt":"Not run yet","message":"Awaiting first credentialed check."}
+  ]
+}

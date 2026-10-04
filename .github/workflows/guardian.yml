@@ -1,0 +1,45 @@
+name: Chicago Bears Lineup Guardian
+
+on:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Allow verified MFL lineup writes
+        type: boolean
+        default: false
+  schedule:
+    - cron: "*/10 * * * 4,5,6,0,1"
+
+concurrency:
+  group: lineup-guardian
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  guardian:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MFL_USERNAME: ${{ secrets.MFL_USERNAME }}
+      MFL_PASSWORD: ${{ secrets.MFL_PASSWORD }}
+      ALERT_EMAIL_FROM: ${{ secrets.ALERT_EMAIL_FROM }}
+      ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
+      SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
+      SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
+      LIVE_LINEUP_WRITES: ${{ inputs.live || vars.LIVE_LINEUP_WRITES || 'false' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm test
+      - run: npm run check
+      - name: Commit audit state
+        run: |
+          git config user.name "adl-lineup-guardian[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          git add data docs
+          git diff --cached --quiet || git commit -m "Update lineup guardian audit"
+          git push
