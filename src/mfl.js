@@ -10,6 +10,10 @@ async function request(url, { cookie, method = "GET", body } = {}) {
   return text;
 }
 
+export async function requestText(url, cookie) {
+  return request(url, { cookie });
+}
+
 export async function login(season, username, password) {
   const params = new URLSearchParams({ USERNAME: username, PASSWORD: password, JSON: "1" });
   const data = JSON.parse(await request(`${BASE}/${season}/login`, { method: "POST", body: params }));
