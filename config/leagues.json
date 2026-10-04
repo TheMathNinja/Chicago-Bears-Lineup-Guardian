@@ -3,12 +3,14 @@
     "key": "ADL",
     "name": "Analytics Dynasty League",
     "leagueId": "60206",
-    "franchiseId": "0005"
+    "franchiseId": "0005",
+    "webHost": "www46.myfantasyleague.com"
   },
   {
     "key": "FAFL",
     "name": "Football Analytics Fantasy Lab",
     "leagueId": "22686",
-    "franchiseId": "0005"
+    "franchiseId": "0005",
+    "webHost": "www43.myfantasyleague.com"
   }
 ]
