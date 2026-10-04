@@ -2,13 +2,15 @@ import fs from "node:fs";
 import { dryRun, loadLeagues, lookaheadMinutes, requireCredentials, season } from "./config.js";
 import { writeDashboard } from "./dashboard.js";
 import { optimizeLineup, parseRules, validateLineup } from "./lineup-rules.js";
-import { exportJson, login, sendMflEmail, submitLineup } from "./mfl.js";
+import { exportJson, login, requestText, sendMflEmail, submitLineup } from "./mfl.js";
 import { isUnavailable, normalizeStatus, rows } from "./normalize.js";
+import { isInitialLineupRunDue, lineupSubmissionStatus } from "./submission-status.js";
 
 const now = new Date(process.env.NOW || Date.now());
 const statePath = "data/state.json";
 fs.mkdirSync("data", { recursive: true });
 const state = fs.existsSync(statePath) ? JSON.parse(fs.readFileSync(statePath, "utf8")) : { events: [], leagues: [] };
+const runMode = process.env.RUN_MODE || "monitor";
 
 function event(league, action, detail) {
   state.events.push({ time: now.toISOString(), league, action, detail });
@@ -77,6 +79,50 @@ async function readLeague(league, cookie) {
   return { leagueData, roster, week, franchise, players, injuries, projections, schedule, byes, kickoffs };
 }
 
+async function readSubmissionStatus(league, week, cookie) {
+  const url = `https://${league.webHost}/${season}/options?L=${league.leagueId}&O=06&W=${week}`;
+  const html = await requestText(url, cookie);
+  return lineupSubmissionStatus(html, "Chicago Bears", week);
+}
+
+async function processInitialLineup(league, cookie, snapshot, pool, firstKickoff, base) {
+  if (!isInitialLineupRunDue(now, firstKickoff)) {
+    return { ...base, status: "idle", message: "Not the 6:00 a.m. ET first-game-day safety-net window." };
+  }
+  const submission = await readSubmissionStatus(league, snapshot.week, cookie);
+  if (submission.status === "unknown") throw new Error(`Could not prove lineup submission status: ${submission.detail}`);
+  if (submission.status === "submitted") {
+    return { ...base, status: "ok", message: `Manual Week ${snapshot.week} submission found: ${submission.detail}` };
+  }
+  const rules = parseRules(snapshot.leagueData.league);
+  const proposal = optimizeLineup({ players: pool, rules });
+  const validation = validateLineup(proposal.players, rules);
+  if (!validation.valid) throw new Error(`Initial optimizer produced an illegal lineup: ${validation.errors.join("; ")}`);
+  const proposedIds = proposal.players.map((p) => p.id).sort();
+  const names = proposal.players.slice().sort((a, b) => a.position.localeCompare(b.position) || b.projection - a.projection)
+    .map((p) => `${p.name} ${p.team} ${p.position} (${p.projection.toFixed(1)})`).join("; ");
+  if (dryRun) {
+    event(league.key, "INITIAL LINEUP DRY RUN", names);
+    return { ...base, status: "changed", message: `Dry run would submit: ${names}` };
+  }
+  const fresh = await readLeague(league, cookie);
+  const freshStatus = await readSubmissionStatus(league, snapshot.week, cookie);
+  if (fresh.week !== snapshot.week || freshStatus.status !== "not_submitted") {
+    throw new Error("Week or submission status changed during evaluation; refusing automatic initial submission");
+  }
+  await submitLineup({ season, leagueId: league.leagueId, week: snapshot.week, starterIds: proposedIds, cookie });
+  const verified = await readLeague(league, cookie);
+  const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
+  if (verifiedIds.join(",") !== proposedIds.join(",")) throw new Error("MFL read-back did not match automatic initial lineup");
+  event(league.key, "INITIAL LINEUP SUBMITTED", names);
+  await sendMflEmail({
+    season, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
+    subject: `[${league.key} Bears] Automatic Week ${snapshot.week} lineup submitted`,
+    message: `No manual Week ${snapshot.week} lineup submission was recorded by 6:00 a.m. ET on the first NFL game day.\n\nThe lineup guardian submitted and verified the highest-projected legal lineup containing no MFL O, IR, H, S, or bye players.\n\n${names}`,
+  });
+  return { ...base, status: "changed", message: `Automatic initial lineup submitted and verified for Week ${snapshot.week}.` };
+}
+
 async function processLeague(league, cookie) {
   const snapshot = await readLeague(league, cookie);
   const byeTeams = getByeTeams(snapshot.byes);
@@ -88,6 +134,8 @@ async function processLeague(league, cookie) {
   const unavailableStarters = pool.filter((p) => p.starter && isUnavailable(p));
   const dueUnavailable = unavailableStarters.filter((p) => (p.bye && firstKickoffWindow) || (p.kickoff && isInWindow(p.kickoff)));
   const base = { key: league.key, week: snapshot.week, checkedAt: now.toISOString(), nextKickoff: nextKickoff?.toISOString() };
+
+  if (runMode === "initial") return processInitialLineup(league, cookie, snapshot, pool, allKickoffs[0], base);
 
   if (!inAnyRosterWindow && !firstKickoffWindow) return { ...base, status: "idle", message: "Outside the 90-minute monitoring window." };
   if (!dueUnavailable.length) return { ...base, status: "ok", message: "Fresh roster, injury, bye, lineup, kickoff, and projection checks passed." };
@@ -149,7 +197,7 @@ async function main() {
   state.leagues = results;
   fs.writeFileSync(statePath, `${JSON.stringify(state, null, 2)}\n`);
   writeDashboard(state);
-  console.log(JSON.stringify({ dryRun, now: now.toISOString(), results }, null, 2));
+  console.log(JSON.stringify({ dryRun, runMode, now: now.toISOString(), results }, null, 2));
 }
 
 await main();
