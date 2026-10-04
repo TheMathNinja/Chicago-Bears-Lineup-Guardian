@@ -110,7 +110,7 @@ async function processInitialLineup(league, cookie, snapshot, pool, firstKickoff
   if (fresh.week !== snapshot.week || freshStatus.status !== "not_submitted") {
     throw new Error("Week or submission status changed during evaluation; refusing automatic initial submission");
   }
-  await submitLineup({ season, leagueId: league.leagueId, week: snapshot.week, starterIds: proposedIds, cookie });
+  await submitLineup({ season, leagueId: league.leagueId, franchiseId: league.franchiseId, week: snapshot.week, starterIds: proposedIds, cookie });
   const verified = await readLeague(league, cookie);
   const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
   if (verifiedIds.join(",") !== proposedIds.join(",")) throw new Error("MFL read-back did not match automatic initial lineup");
@@ -136,6 +136,24 @@ async function processLeague(league, cookie) {
   const base = { key: league.key, week: snapshot.week, checkedAt: now.toISOString(), nextKickoff: nextKickoff?.toISOString() };
 
   if (runMode === "initial") return processInitialLineup(league, cookie, snapshot, pool, allKickoffs[0], base);
+  if (runMode === "noop") {
+    const existingIds = String(snapshot.franchise.starters || "").split(",").filter(Boolean).sort();
+    if (!existingIds.length) throw new Error(`No existing Week ${snapshot.week} lineup is available for a no-op test`);
+    const fresh = await readLeague(league, cookie);
+    const freshIds = String(fresh.franchise.starters || "").split(",").filter(Boolean).sort();
+    if (fresh.week !== snapshot.week || freshIds.join(",") !== existingIds.join(",")) {
+      throw new Error("Lineup or week changed during no-op verification; refusing write");
+    }
+    await submitLineup({
+      season, leagueId: league.leagueId, franchiseId: league.franchiseId, week: snapshot.week,
+      starterIds: existingIds, cookie, comments: "Lineup Guardian unchanged-lineup verification",
+    });
+    const verified = await readLeague(league, cookie);
+    const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
+    if (verifiedIds.join(",") !== existingIds.join(",")) throw new Error("No-op MFL read-back changed starter IDs");
+    event(league.key, "NO-OP SUBMISSION VERIFIED", `${existingIds.length} unchanged Week ${snapshot.week} starters`);
+    return { ...base, status: "ok", message: `End-to-end submission verified with ${existingIds.length} unchanged starters.` };
+  }
 
   if (!inAnyRosterWindow && !firstKickoffWindow) return { ...base, status: "idle", message: "Outside the 90-minute monitoring window." };
   if (!dueUnavailable.length) return { ...base, status: "ok", message: "Fresh roster, injury, bye, lineup, kickoff, and projection checks passed." };
@@ -162,7 +180,7 @@ async function processLeague(league, cookie) {
   if (fresh.week !== snapshot.week || freshStarters.join(",") !== currentStarterIds.sort().join(",")) {
     throw new Error("Lineup or week changed during evaluation; refusing stale write");
   }
-  await submitLineup({ season, leagueId: league.leagueId, week: snapshot.week, starterIds: proposedIds, cookie });
+  await submitLineup({ season, leagueId: league.leagueId, franchiseId: league.franchiseId, week: snapshot.week, starterIds: proposedIds, cookie });
   const verified = await readLeague(league, cookie);
   const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
   if (verifiedIds.join(",") !== proposedIds.join(",")) throw new Error("MFL read-back did not match submitted lineup");
