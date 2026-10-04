@@ -1,0 +1,56 @@
+name: Chicago Bears Initial Lineup Safety Net
+
+on:
+  workflow_dispatch:
+    inputs:
+      live:
+        description: Allow verified MFL lineup submission
+        type: boolean
+        default: false
+  schedule:
+    # Both UTC hours are intentional; the worker applies a DST-safe 6:00 a.m. ET gate.
+    - cron: "4 10,11 * 9-12 0-6"
+
+concurrency:
+  group: lineup-guardian
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  initial-lineup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      MFL_USERNAME: ${{ secrets.MFL_USERNAME }}
+      MFL_PASSWORD: ${{ secrets.MFL_PASSWORD }}
+      RUN_MODE: initial
+      LIVE_LINEUP_WRITES: ${{ inputs.live || vars.LIVE_LINEUP_WRITES || 'false' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - run: npm test
+      - name: Check configuration
+        id: configured
+        shell: bash
+        run: |
+          if [[ -n "$MFL_USERNAME" && -n "$MFL_PASSWORD" ]]; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "Initial lineup safety net is not credentialed yet; safely skipping."
+          fi
+      - if: steps.configured.outputs.ready == 'true'
+        run: npm run check
+      - name: Commit audit state
+        if: steps.configured.outputs.ready == 'true'
+        run: |
+          git config user.name "adl-lineup-guardian[bot]"
+          git config user.email "actions@users.noreply.github.com"
+          git pull --rebase origin main
+          git add data docs
+          git diff --cached --quiet || git commit -m "Update initial-lineup audit"
+          git push
