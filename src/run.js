@@ -146,7 +146,7 @@ async function processLeague(league, cookie) {
     }
     await submitLineup({
       season, leagueId: league.leagueId, franchiseId: league.franchiseId, week: snapshot.week,
-      starterIds: existingIds, cookie, comments: "Lineup Guardian unchanged-lineup verification",
+      starterIds: existingIds, cookie,
     });
     const verified = await readLeague(league, cookie);
     const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
@@ -197,7 +197,7 @@ async function main() {
   const { username, password } = requireCredentials();
   const cookie = await login(season, username, password);
   const leagues = loadLeagues();
-  await verifyLogin(season, cookie, leagues.map((league) => league.leagueId));
+  await verifyLogin(season, cookie, leagues);
   const results = [];
   for (const league of leagues) {
     try { results.push(await processLeague(league, cookie)); }
