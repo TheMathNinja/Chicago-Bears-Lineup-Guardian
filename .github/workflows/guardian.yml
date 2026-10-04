@@ -7,6 +7,10 @@ on:
         description: Allow verified MFL lineup writes
         type: boolean
         default: false
+      noop:
+        description: Resubmit and verify the existing lineup unchanged
+        type: boolean
+        default: false
   schedule:
     - cron: "*/10 * * * 4,5,6,0,1"
 
@@ -28,7 +32,7 @@ jobs:
       ALERT_EMAIL_TO: ${{ secrets.ALERT_EMAIL_TO }}
       SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-      RUN_MODE: monitor
+      RUN_MODE: ${{ inputs.noop && 'noop' || 'monitor' }}
       LIVE_LINEUP_WRITES: ${{ inputs.live || vars.LIVE_LINEUP_WRITES || 'false' }}
     steps:
       - uses: actions/checkout@v5
@@ -53,7 +57,7 @@ jobs:
         run: |
           git config user.name "adl-lineup-guardian[bot]"
           git config user.email "actions@users.noreply.github.com"
-          git pull --rebase origin main
           git add data docs
           git diff --cached --quiet || git commit -m "Update lineup guardian audit"
+          git pull --rebase origin main
           git push
