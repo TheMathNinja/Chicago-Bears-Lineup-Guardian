@@ -2,7 +2,7 @@ const BASE = "https://api.myfantasyleague.com";
 
 async function request(url, { cookie, method = "GET", body } = {}) {
   const headers = { "User-Agent": "Chicago-Bears-Lineup-Guardian/0.1" };
-  if (cookie) headers.Cookie = `MFL_USER_ID=${encodeURIComponent(cookie)}`;
+  if (cookie) headers.Cookie = `MFL_USER_ID=${cookie}`;
   if (body) headers["Content-Type"] = "application/x-www-form-urlencoded";
   const response = await fetch(url, { method, headers, body });
   const text = await response.text();
@@ -19,7 +19,18 @@ export async function login(season, username, password) {
   const text = await request(`${BASE}/${season}/login`, { method: "POST", body: params });
   const match = text.match(/\bMFL_USER_ID=["']([^"']+)["']/i);
   if (!match) throw new Error(`MFL login failed: ${text.slice(0, 300) || "empty response"}`);
-  return match[1];
+  const xmlDecoded = match[1].replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+  let decoded = xmlDecoded;
+  try { decoded = decodeURIComponent(xmlDecoded); } catch { /* Already decoded. */ }
+  return encodeURIComponent(decoded);
+}
+
+export async function verifyLogin(season, cookie, expectedLeagueIds) {
+  const data = await exportJson(season, "myleagues", { YEAR: season, FRANCHISE_NAMES: "1" }, cookie);
+  const leagues = data.leagues?.league;
+  const ids = new Set((Array.isArray(leagues) ? leagues : leagues ? [leagues] : []).map((league) => String(league.id)));
+  const missing = expectedLeagueIds.filter((id) => !ids.has(String(id)));
+  if (missing.length) throw new Error(`Authenticated MFL account cannot access league(s): ${missing.join(", ")}`);
 }
 
 export async function exportJson(season, type, params = {}, cookie) {
