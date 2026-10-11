@@ -1,10 +1,13 @@
 const ILLEGAL = new Set(["O", "IR", "IR-R", "IR-D", "IR-PUP", "PUP", "H", "S"]);
 
 export function normalizeStatus(value) {
-  const status = String(value || "").trim().toUpperCase();
+  const status = String(value || "").trim().toUpperCase().replace(/[()]/g, "");
   if (!status) return "";
-  if (status.startsWith("IR") || status === "PUP") return "IR";
-  return status.replace(/[()]/g, "");
+  if (status.startsWith("IR") || status.includes("INJURED RESERVE") || status.includes("PUP")) return "IR";
+  if (status === "OUT") return "O";
+  if (status === "HOLDOUT") return "H";
+  if (status === "SUSPENDED" || status === "SUSPENSION") return "S";
+  return status;
 }
 
 export function isUnavailable({ injuryStatus, bye }) {

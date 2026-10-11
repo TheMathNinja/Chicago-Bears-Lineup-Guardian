@@ -11,22 +11,27 @@ const LINEUP_GUARDIAN = {
 
 function runLineupGuardianScheduler() {
   const now = new Date();
-  const minute = now.getMinutes();
-  if (minute % 10 >= 5) return; // Five-minute trigger dispatches once in each ten-minute bucket.
-  const slot = Math.floor(now.getTime() / 600000);
   const props = PropertiesService.getScriptProperties();
   const token = props.getProperty(LINEUP_GUARDIAN.tokenProperty);
   if (!token) throw new Error('Missing ' + LINEUP_GUARDIAN.tokenProperty + ' Script Property.');
+  const slot = String(Math.floor(now.getTime() / 300000));
+  if (props.getProperty('LINEUP_GUARDIAN_LAST_SLOT') === slot) return;
+
   const easternClock = Utilities.formatDate(now, 'America/New_York', 'HH:mm');
-  if (easternClock >= '06:00' && easternClock < '06:05') {
-    dispatchLineupGuardian_(LINEUP_GUARDIAN.initialWorkflow, 'LINEUP_GUARDIAN_INITIAL_' +
-      Utilities.formatDate(now, 'America/New_York', 'yyyy-MM-dd'), props, token);
+  const easternDate = Utilities.formatDate(now, 'America/New_York', 'yyyy-MM-dd');
+  if (easternClock >= '06:00' && easternClock < '06:10' &&
+      props.getProperty('LINEUP_GUARDIAN_LAST_INITIAL_DATE') !== easternDate) {
+    dispatchLineupGuardian_(LINEUP_GUARDIAN.initialWorkflow, token);
+    props.setProperty('LINEUP_GUARDIAN_LAST_INITIAL_DATE', easternDate);
   }
-  dispatchLineupGuardian_(LINEUP_GUARDIAN.workflow, 'LINEUP_GUARDIAN_SLOT_' + slot, props, token);
+  dispatchLineupGuardian_(LINEUP_GUARDIAN.workflow, token);
+  props.setProperties({
+    LINEUP_GUARDIAN_LAST_SLOT: slot,
+    LINEUP_GUARDIAN_LAST_SUCCESS_AT: now.toISOString()
+  });
 }
 
-function dispatchLineupGuardian_(workflow, receiptKey, props, token) {
-  if (props.getProperty(receiptKey) === 'sent') return;
+function dispatchLineupGuardian_(workflow, token) {
   const response = UrlFetchApp.fetch(
     'https://api.github.com/repos/' + LINEUP_GUARDIAN.owner + '/' + LINEUP_GUARDIAN.repo +
       '/actions/workflows/' + workflow + '/dispatches',
@@ -44,7 +49,13 @@ function dispatchLineupGuardian_(workflow, receiptKey, props, token) {
       'GitHub returned HTTP ' + response.getResponseCode() + ':\n\n' + response.getContentText());
     throw new Error(response.getContentText());
   }
-  props.setProperty(receiptKey, 'sent');
+}
+
+function testLineupGuardianDispatchNow() {
+  const props = PropertiesService.getScriptProperties();
+  const token = props.getProperty(LINEUP_GUARDIAN.tokenProperty);
+  if (!token) throw new Error('Missing ' + LINEUP_GUARDIAN.tokenProperty + ' Script Property.');
+  dispatchLineupGuardian_(LINEUP_GUARDIAN.workflow, token);
 }
 
 function installLineupGuardianScheduler() {
