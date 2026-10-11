@@ -17,18 +17,18 @@
     {
       "key": "ADL",
       "week": 5,
-      "checkedAt": "2026-10-11T18:30:10.227Z",
+      "checkedAt": "2026-10-11T18:35:07.691Z",
       "nextKickoff": "2026-10-11T20:05:00.000Z",
-      "status": "idle",
-      "message": "Outside the 90-minute monitoring window."
+      "status": "ok",
+      "message": "Fresh roster, injury, bye, lineup, kickoff, and projection checks passed."
     },
     {
       "key": "FAFL",
       "week": 5,
-      "checkedAt": "2026-10-11T18:30:10.227Z",
+      "checkedAt": "2026-10-11T18:35:07.691Z",
       "nextKickoff": "2026-10-11T20:05:00.000Z",
-      "status": "idle",
-      "message": "Outside the 90-minute monitoring window."
+      "status": "ok",
+      "message": "Fresh roster, injury, bye, lineup, kickoff, and projection checks passed."
     }
   ]
 }
