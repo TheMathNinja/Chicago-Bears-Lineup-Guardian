@@ -32,23 +32,69 @@ function runLineupGuardianScheduler() {
 }
 
 function dispatchLineupGuardian_(workflow, token) {
-  const response = UrlFetchApp.fetch(
-    'https://api.github.com/repos/' + LINEUP_GUARDIAN.owner + '/' + LINEUP_GUARDIAN.repo +
-      '/actions/workflows/' + workflow + '/dispatches',
-    {
+  const startedAt = new Date();
+  const dispatchId = 'gas-' + Utilities.formatDate(startedAt, 'UTC', 'yyyyMMdd-HHmmss') +
+    '-' + workflow.replace(/[^A-Za-z0-9]/g, '-');
+  const url = 'https://api.github.com/repos/' + LINEUP_GUARDIAN.owner + '/' +
+    LINEUP_GUARDIAN.repo + '/actions/workflows/' + workflow + '/dispatches';
+  let lastCode = 0;
+  let lastBody = '';
+
+  for (let attempt = 1; attempt <= 4; attempt++) {
+    const response = UrlFetchApp.fetch(url, {
       method: 'post',
-      headers: {Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + token,
-        'X-GitHub-Api-Version': '2022-11-28'},
+      headers: githubHeaders_(token),
       contentType: 'application/json',
-      payload: JSON.stringify({ref: 'main', inputs: {live: true}}),
+      payload: JSON.stringify({ref: 'main', inputs: {live: true, dispatch_id: dispatchId}}),
       muteHttpExceptions: true
+    });
+    lastCode = response.getResponseCode();
+    lastBody = response.getContentText();
+    if (lastCode === 204) return;
+
+    if (lastCode >= 500 && lastCode <= 599) {
+      if (lineupGuardianDispatchExists_(workflow, token, dispatchId, startedAt)) return;
+      Utilities.sleep(attempt * 3000);
+      continue;
     }
-  );
-  if (response.getResponseCode() !== 204) {
-    MailApp.sendEmail(LINEUP_GUARDIAN.alertEmail, 'Lineup Guardian dispatch failed',
-      'GitHub returned HTTP ' + response.getResponseCode() + ':\n\n' + response.getContentText());
-    throw new Error(response.getContentText());
+    break;
   }
+
+  MailApp.sendEmail(LINEUP_GUARDIAN.alertEmail, 'Lineup Guardian dispatch failed',
+    'GitHub returned HTTP ' + lastCode + ':\n\n' + lastBody);
+  throw new Error('GitHub returned HTTP ' + lastCode + ': ' + lastBody);
+}
+
+function githubHeaders_(token) {
+  return {
+    Accept: 'application/vnd.github+json',
+    Authorization: 'Bearer ' + token,
+    'X-GitHub-Api-Version': '2022-11-28'
+  };
+}
+
+function lineupGuardianDispatchExists_(workflow, token, dispatchId, startedAt) {
+  const url = 'https://api.github.com/repos/' + LINEUP_GUARDIAN.owner + '/' +
+    LINEUP_GUARDIAN.repo + '/actions/workflows/' + workflow +
+    '/runs?event=workflow_dispatch&per_page=20';
+
+  for (let poll = 1; poll <= 3; poll++) {
+    Utilities.sleep(poll * 2000);
+    const response = UrlFetchApp.fetch(url, {
+      method: 'get',
+      headers: githubHeaders_(token),
+      muteHttpExceptions: true
+    });
+    if (response.getResponseCode() !== 200) continue;
+
+    const runs = JSON.parse(response.getContentText()).workflow_runs || [];
+    const found = runs.some(function(run) {
+      return String(run.display_title || '').indexOf(dispatchId) !== -1 &&
+        new Date(run.created_at).getTime() >= startedAt.getTime() - 60000;
+    });
+    if (found) return true;
+  }
+  return false;
 }
 
 function testLineupGuardianDispatchNow() {

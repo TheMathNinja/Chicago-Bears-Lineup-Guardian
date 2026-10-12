@@ -1,4 +1,5 @@
 name: Chicago Bears Initial Lineup Safety Net
+run-name: ${{ inputs.dispatch_id != '' && format('Chicago Bears Initial Lineup Safety Net - {0}', inputs.dispatch_id) || 'Chicago Bears Initial Lineup Safety Net' }}
 
 on:
   workflow_dispatch:
@@ -7,6 +8,10 @@ on:
         description: Allow verified MFL lineup submission
         type: boolean
         default: false
+      dispatch_id:
+        description: Optional idempotency identifier supplied by the precision scheduler
+        type: string
+        default: ''
   schedule:
     # Both UTC hours are intentional; the worker applies a DST-safe 6:00 a.m. ET gate.
     - cron: "4 10,11 * 9-12 0-6"
