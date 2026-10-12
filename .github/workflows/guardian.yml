@@ -56,14 +56,4 @@ jobs:
         run: npm run check
       - name: Commit audit state
         if: steps.configured.outputs.ready == 'true'
-        run: |
-          git config user.name "adl-lineup-guardian[bot]"
-          git config user.email "actions@users.noreply.github.com"
-          git add data docs
-          git diff --cached --quiet || git commit -m "Update lineup guardian audit"
-          if ! git pull --rebase origin main; then
-            git rebase --abort || true
-            echo "::warning::A newer guardian run published audit state first; lineup monitoring completed successfully, but this duplicate audit update was skipped."
-            exit 0
-          fi
-          git push
+        run: bash scripts/publish_audit_state.sh "Update lineup guardian audit"

@@ -47,10 +47,4 @@ jobs:
         run: npm run check
       - name: Commit audit state
         if: steps.configured.outputs.ready == 'true'
-        run: |
-          git config user.name "adl-lineup-guardian[bot]"
-          git config user.email "actions@users.noreply.github.com"
-          git add data docs
-          git diff --cached --quiet || git commit -m "Update initial-lineup audit"
-          git pull --rebase origin main
-          git push
+        run: bash scripts/publish_audit_state.sh "Update initial-lineup audit"
