@@ -12,10 +12,20 @@ const LINEUP_GUARDIAN = {
 function runLineupGuardianScheduler() {
   const now = new Date();
   const props = PropertiesService.getScriptProperties();
-  const token = props.getProperty(LINEUP_GUARDIAN.tokenProperty);
-  if (!token) throw new Error('Missing ' + LINEUP_GUARDIAN.tokenProperty + ' Script Property.');
   const slot = String(Math.floor(now.getTime() / 300000));
   if (props.getProperty('LINEUP_GUARDIAN_LAST_SLOT') === slot) return;
+
+  if (!isLineupGuardianActiveTime_(now)) {
+    props.setProperties({
+      LINEUP_GUARDIAN_LAST_SLOT: slot,
+      LINEUP_GUARDIAN_LAST_SKIP_AT: now.toISOString(),
+      LINEUP_GUARDIAN_LAST_SKIP_REASON: 'Outside weekly lineup-monitoring hours'
+    });
+    return;
+  }
+
+  const token = props.getProperty(LINEUP_GUARDIAN.tokenProperty);
+  if (!token) throw new Error('Missing ' + LINEUP_GUARDIAN.tokenProperty + ' Script Property.');
 
   const easternClock = Utilities.formatDate(now, 'America/New_York', 'HH:mm');
   const easternDate = Utilities.formatDate(now, 'America/New_York', 'yyyy-MM-dd');
@@ -29,6 +39,15 @@ function runLineupGuardianScheduler() {
     LINEUP_GUARDIAN_LAST_SLOT: slot,
     LINEUP_GUARDIAN_LAST_SUCCESS_AT: now.toISOString()
   });
+}
+
+function isLineupGuardianActiveTime_(now) {
+  const easternDay = Utilities.formatDate(now, 'America/New_York', 'EEE');
+  const easternClock = Utilities.formatDate(now, 'America/New_York', 'HH:mm');
+
+  // ADL/FAFL weeks close after Monday night. Tuesday has no lineup work.
+  // The broad Wed-Mon window still covers unusual Wednesday/Friday/Saturday games.
+  return easternDay !== 'Tue' && easternClock >= '05:55' && easternClock < '23:30';
 }
 
 function dispatchLineupGuardian_(workflow, token) {

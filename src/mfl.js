@@ -1,13 +1,32 @@
 const BASE = "https://api.myfantasyleague.com";
+const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+
+function wait(milliseconds) {
+  return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
 
 async function request(url, { cookie, method = "GET", body } = {}) {
   const headers = { "User-Agent": "Chicago-Bears-Lineup-Guardian/0.1" };
   if (cookie) headers.Cookie = `MFL_USER_ID=${cookie}`;
   if (body) headers["Content-Type"] = "application/x-www-form-urlencoded";
-  const response = await fetch(url, { method, headers, body });
-  const text = await response.text();
-  if (!response.ok) throw new Error(`MFL ${response.status} for ${url}: ${text.slice(0, 300)}`);
-  return text;
+  const mayRetry = method === "GET" || /\/login(?:\?|$)/.test(url);
+  const maxAttempts = mayRetry ? 4 : 1;
+  const retryBaseMs = Number(process.env.MFL_RETRY_BASE_MS || 1000);
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const response = await fetch(url, { method, headers, body });
+    const text = await response.text();
+    if (response.ok) return text;
+
+    const retryable = mayRetry && RETRYABLE_STATUS.has(response.status) && attempt < maxAttempts;
+    if (!retryable) {
+      throw new Error(`MFL ${response.status} for ${url}: ${text.slice(0, 300)}`);
+    }
+    console.warn(`MFL ${response.status}; retrying ${url} (attempt ${attempt + 1}/${maxAttempts})`);
+    await wait(retryBaseMs * (2 ** (attempt - 1)));
+  }
+
+  throw new Error(`MFL request exhausted retries for ${url}`);
 }
 
 export async function requestText(url, cookie) {
