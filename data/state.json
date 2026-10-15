@@ -17,18 +17,18 @@
     {
       "key": "ADL",
       "week": 6,
-      "checkedAt": "2026-10-15T10:05:17.003Z",
+      "checkedAt": "2026-10-15T10:05:58.261Z",
       "nextKickoff": "2026-10-16T00:15:00.000Z",
-      "status": "ok",
-      "message": "Manual Week 6 submission found: Tue Oct 13 10:20:07 a.m. ET 2026"
+      "status": "idle",
+      "message": "Outside the 90-minute monitoring window."
     },
     {
       "key": "FAFL",
       "week": 6,
-      "checkedAt": "2026-10-15T10:05:17.003Z",
+      "checkedAt": "2026-10-15T10:05:58.261Z",
       "nextKickoff": "2026-10-16T00:15:00.000Z",
-      "status": "ok",
-      "message": "Manual Week 6 submission found: Wed Oct 14 9:04:48 p.m. ET 2026"
+      "status": "idle",
+      "message": "Outside the 90-minute monitoring window."
     }
   ]
 }
