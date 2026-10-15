@@ -17,7 +17,7 @@
     {
       "key": "ADL",
       "week": 6,
-      "checkedAt": "2026-10-15T19:45:18.830Z",
+      "checkedAt": "2026-10-15T19:50:18.102Z",
       "nextKickoff": "2026-10-16T00:15:00.000Z",
       "status": "idle",
       "message": "Outside the 90-minute monitoring window."
@@ -25,7 +25,7 @@
     {
       "key": "FAFL",
       "week": 6,
-      "checkedAt": "2026-10-15T19:45:18.830Z",
+      "checkedAt": "2026-10-15T19:50:18.102Z",
       "nextKickoff": "2026-10-16T00:15:00.000Z",
       "status": "idle",
       "message": "Outside the 90-minute monitoring window."
