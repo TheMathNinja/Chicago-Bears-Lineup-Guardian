@@ -14,7 +14,18 @@ async function request(url, { cookie, method = "GET", body } = {}) {
   const retryBaseMs = Number(process.env.MFL_RETRY_BASE_MS || 1000);
 
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const response = await fetch(url, { method, headers, body });
+    let response;
+    try {
+      response = await fetch(url, { method, headers, body });
+    } catch (error) {
+      const retryable = mayRetry && attempt < maxAttempts;
+      if (!retryable) {
+        throw new Error(`MFL network request failed for ${url} after ${attempt} attempt(s): ${error.message}`, { cause: error });
+      }
+      console.warn(`MFL network error; retrying ${url} (attempt ${attempt + 1}/${maxAttempts}): ${error.message}`);
+      await wait(retryBaseMs * (2 ** (attempt - 1)));
+      continue;
+    }
     const text = await response.text();
     if (response.ok) return text;
 
