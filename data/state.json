@@ -17,14 +17,14 @@
     {
       "key": "ADL",
       "week": 6,
-      "checkedAt": "2026-10-20T02:05:13.171Z",
+      "checkedAt": "2026-10-20T02:10:13.083Z",
       "status": "idle",
       "message": "Outside the 90-minute monitoring window."
     },
     {
       "key": "FAFL",
       "week": 6,
-      "checkedAt": "2026-10-20T02:05:13.171Z",
+      "checkedAt": "2026-10-20T02:10:13.083Z",
       "status": "idle",
       "message": "Outside the 90-minute monitoring window."
     }
