@@ -6,7 +6,9 @@ const LINEUP_GUARDIAN = {
   workflow: 'guardian.yml',
   initialWorkflow: 'initial-lineup.yml',
   tokenProperty: 'GITHUB_WORKFLOW_TOKEN',
-  alertEmail: 'fili.mikey@gmail.com'
+  alertEmail: 'fili.mikey@gmail.com',
+  season: 2026,
+  lookaheadMinutes: 90
 };
 
 function runLineupGuardianScheduler() {
@@ -15,11 +17,23 @@ function runLineupGuardianScheduler() {
   const slot = String(Math.floor(now.getTime() / 300000));
   if (props.getProperty('LINEUP_GUARDIAN_LAST_SLOT') === slot) return;
 
-  if (!isLineupGuardianActiveTime_(now)) {
+  const due = lineupGuardianDue_(now);
+  if (!due.monitor && !due.initial) {
     props.setProperties({
       LINEUP_GUARDIAN_LAST_SLOT: slot,
       LINEUP_GUARDIAN_LAST_SKIP_AT: now.toISOString(),
-      LINEUP_GUARDIAN_LAST_SKIP_REASON: 'Outside weekly lineup-monitoring hours'
+      LINEUP_GUARDIAN_LAST_SKIP_REASON: due.reason,
+      LINEUP_GUARDIAN_NEXT_KICKOFF: due.nextKickoff || ''
+    });
+    return;
+  }
+
+  const rateLimitUntil = Number(props.getProperty('LINEUP_GUARDIAN_RATE_LIMIT_UNTIL') || 0);
+  if (rateLimitUntil > now.getTime()) {
+    props.setProperties({
+      LINEUP_GUARDIAN_LAST_SLOT: slot,
+      LINEUP_GUARDIAN_LAST_SKIP_AT: now.toISOString(),
+      LINEUP_GUARDIAN_LAST_SKIP_REASON: 'GitHub API rate-limit backoff until ' + new Date(rateLimitUntil).toISOString()
     });
     return;
   }
@@ -27,30 +41,76 @@ function runLineupGuardianScheduler() {
   const token = props.getProperty(LINEUP_GUARDIAN.tokenProperty);
   if (!token) throw new Error('Missing ' + LINEUP_GUARDIAN.tokenProperty + ' Script Property.');
 
-  const easternClock = Utilities.formatDate(now, 'America/New_York', 'HH:mm');
   const easternDate = Utilities.formatDate(now, 'America/New_York', 'yyyy-MM-dd');
-  if (easternClock >= '06:00' && easternClock < '06:10' &&
+  if (due.initial &&
       props.getProperty('LINEUP_GUARDIAN_LAST_INITIAL_DATE') !== easternDate) {
-    dispatchLineupGuardian_(LINEUP_GUARDIAN.initialWorkflow, token);
-    props.setProperty('LINEUP_GUARDIAN_LAST_INITIAL_DATE', easternDate);
+    if (dispatchLineupGuardian_(LINEUP_GUARDIAN.initialWorkflow, token, props)) {
+      props.setProperty('LINEUP_GUARDIAN_LAST_INITIAL_DATE', easternDate);
+    }
   }
-  dispatchLineupGuardian_(LINEUP_GUARDIAN.workflow, token);
+  const monitorDispatched = !due.monitor || dispatchLineupGuardian_(LINEUP_GUARDIAN.workflow, token, props);
   props.setProperties({
     LINEUP_GUARDIAN_LAST_SLOT: slot,
-    LINEUP_GUARDIAN_LAST_SUCCESS_AT: now.toISOString()
+    LINEUP_GUARDIAN_LAST_SUCCESS_AT: monitorDispatched ? now.toISOString() :
+      (props.getProperty('LINEUP_GUARDIAN_LAST_SUCCESS_AT') || ''),
+    LINEUP_GUARDIAN_NEXT_KICKOFF: due.nextKickoff || ''
   });
 }
 
-function isLineupGuardianActiveTime_(now) {
-  const easternDay = Utilities.formatDate(now, 'America/New_York', 'EEE');
-  const easternClock = Utilities.formatDate(now, 'America/New_York', 'HH:mm');
+function lineupGuardianDue_(now) {
+  let response;
+  try {
+    response = UrlFetchApp.fetch(
+      'https://api.myfantasyleague.com/' + LINEUP_GUARDIAN.season +
+        '/export?TYPE=nflSchedule&JSON=1',
+      {muteHttpExceptions: true}
+    );
+  } catch (error) {
+    return {monitor: false, initial: false,
+      reason: 'MFL NFL schedule request failed; native GitHub backup remains active: ' + error.message};
+  }
+  if (response.getResponseCode() !== 200) {
+    return {monitor: false, initial: false,
+      reason: 'MFL NFL schedule unavailable (HTTP ' + response.getResponseCode() + '); native GitHub backup remains active'};
+  }
 
-  // ADL/FAFL weeks close after Monday night. Tuesday has no lineup work.
-  // The broad Wed-Mon window still covers unusual Wednesday/Friday/Saturday games.
-  return easternDay !== 'Tue' && easternClock >= '05:55' && easternClock < '23:30';
+  const payload = JSON.parse(response.getContentText());
+  const matchups = (payload.nflSchedule && payload.nflSchedule.matchup) || [];
+  const rows = Array.isArray(matchups) ? matchups : [matchups];
+  const kickoffs = rows.map(function(matchup) {
+    return new Date(Number(matchup.kickoff) * 1000);
+  }).filter(function(kickoff) {
+    return !isNaN(kickoff.getTime());
+  }).sort(function(a, b) {
+    return a.getTime() - b.getTime();
+  });
+  if (!kickoffs.length) {
+    return {monitor: false, initial: false,
+      reason: 'MFL returned no current-week NFL kickoffs; native GitHub backup remains active'};
+  }
+
+  const lookaheadMs = LINEUP_GUARDIAN.lookaheadMinutes * 60 * 1000;
+  const monitor = kickoffs.some(function(kickoff) {
+    const delta = kickoff.getTime() - now.getTime();
+    return delta >= 0 && delta <= lookaheadMs;
+  });
+  const firstKickoff = kickoffs[0];
+  const easternDate = Utilities.formatDate(now, 'America/New_York', 'yyyy-MM-dd');
+  const firstKickoffDate = Utilities.formatDate(firstKickoff, 'America/New_York', 'yyyy-MM-dd');
+  const easternClock = Utilities.formatDate(now, 'America/New_York', 'HH:mm');
+  const initial = easternDate === firstKickoffDate && easternClock >= '06:00' && easternClock < '06:10';
+  const nextKickoff = kickoffs.filter(function(kickoff) {
+    return kickoff.getTime() > now.getTime();
+  })[0];
+  return {
+    monitor: monitor,
+    initial: initial,
+    nextKickoff: nextKickoff ? nextKickoff.toISOString() : '',
+    reason: 'Outside an actual 90-minute NFL kickoff window'
+  };
 }
 
-function dispatchLineupGuardian_(workflow, token) {
+function dispatchLineupGuardian_(workflow, token, props) {
   const startedAt = new Date();
   const dispatchId = 'gas-' + Utilities.formatDate(startedAt, 'UTC', 'yyyyMMdd-HHmmss') +
     '-' + workflow.replace(/[^A-Za-z0-9]/g, '-');
@@ -69,7 +129,23 @@ function dispatchLineupGuardian_(workflow, token) {
     });
     lastCode = response.getResponseCode();
     lastBody = response.getContentText();
-    if (lastCode === 204) return;
+    if (lastCode === 204) return true;
+
+    const headers = response.getHeaders();
+    const remaining = githubHeader_(headers, 'x-ratelimit-remaining');
+    if (lastCode === 403 && String(remaining || '') === '0') {
+      const resetSeconds = Number(githubHeader_(headers, 'x-ratelimit-reset') || 0);
+      const resetMs = resetSeconds > 0 ? resetSeconds * 1000 : Date.now() + 60 * 60 * 1000;
+      props.setProperty('LINEUP_GUARDIAN_RATE_LIMIT_UNTIL', String(resetMs));
+      const alertKey = 'LINEUP_GUARDIAN_RATE_LIMIT_ALERT_' + String(resetSeconds || Math.floor(resetMs / 3600000));
+      if (props.getProperty(alertKey) !== 'sent') {
+        MailApp.sendEmail(LINEUP_GUARDIAN.alertEmail, 'Lineup Guardian GitHub rate limit reached',
+          'The precision dispatcher paused until ' + new Date(resetMs).toISOString() +
+          '. GitHub\'s native ten-minute backup remains active.\n\n' + lastBody);
+        props.setProperty(alertKey, 'sent');
+      }
+      return false;
+    }
 
     if (lastCode >= 500 && lastCode <= 599) {
       if (lineupGuardianDispatchExists_(workflow, token, dispatchId, startedAt)) return;
@@ -82,6 +158,15 @@ function dispatchLineupGuardian_(workflow, token) {
   MailApp.sendEmail(LINEUP_GUARDIAN.alertEmail, 'Lineup Guardian dispatch failed',
     'GitHub returned HTTP ' + lastCode + ':\n\n' + lastBody);
   throw new Error('GitHub returned HTTP ' + lastCode + ': ' + lastBody);
+}
+
+function githubHeader_(headers, name) {
+  const wanted = String(name).toLowerCase();
+  const keys = Object.keys(headers || {});
+  for (let i = 0; i < keys.length; i++) {
+    if (keys[i].toLowerCase() === wanted) return headers[keys[i]];
+  }
+  return '';
 }
 
 function githubHeaders_(token) {
@@ -120,7 +205,7 @@ function testLineupGuardianDispatchNow() {
   const props = PropertiesService.getScriptProperties();
   const token = props.getProperty(LINEUP_GUARDIAN.tokenProperty);
   if (!token) throw new Error('Missing ' + LINEUP_GUARDIAN.tokenProperty + ' Script Property.');
-  dispatchLineupGuardian_(LINEUP_GUARDIAN.workflow, token);
+  dispatchLineupGuardian_(LINEUP_GUARDIAN.workflow, token, props);
 }
 
 function installLineupGuardianScheduler() {

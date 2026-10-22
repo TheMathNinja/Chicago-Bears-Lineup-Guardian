@@ -13,7 +13,7 @@ The guardian polls during NFL game windows, identifies unavailable starters, and
 - Every decision is recorded in `data/events.json` and rendered in `docs/index.html`.
 - Any unavailable starter with no legal replacement produces an urgent alert and no partial write.
 
-The GitHub schedule is a backup heartbeat. The installed Google Apps Script dispatcher invokes this workflow every five minutes; the worker exits immediately outside an active 90-minute game window. MFL's verbose injury values (for example `Out`, `Suspended`, and `Holdout`) are normalized to the website's `O`, `S`, and `H` designations before lineup eligibility is evaluated.
+The GitHub schedule is a backup heartbeat. The installed Google Apps Script checks MFL's public current-week NFL schedule every five minutes and invokes GitHub only within an actual 90-minute kickoff window (plus the 6:00 a.m. first-game-day safety check). GitHub rate-limit responses pause precision dispatches until the advertised reset while the native backup remains available. MFL's verbose injury values (for example `Out`, `Suspended`, and `Holdout`) are normalized to the website's `O`, `S`, and `H` designations before lineup eligibility is evaluated.
 
 At 6:00 a.m. Eastern on the date of each week's first NFL game, a separate safety-net workflow checks MFL's week-specific submission stamp. If no manual submission exists, it builds, submits, reads back, and emails confirmation of the highest-projected legal lineup with no `O`, `IR`, `H`, `S`, or bye players.
 
