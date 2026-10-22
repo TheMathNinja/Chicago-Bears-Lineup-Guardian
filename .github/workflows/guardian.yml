@@ -53,7 +53,7 @@ jobs:
             exit 0
           fi
           cutoff="$(date -u -d '8 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
-          recent="$(gh run list --workflow guardian.yml --event workflow_dispatch --limit 20 \
+          recent="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow guardian.yml --event workflow_dispatch --limit 20 \
             --json createdAt,status --jq "[.[] | select(.createdAt >= \"${cutoff}\" and (.status == \"queued\" or .status == \"in_progress\" or .status == \"completed\"))] | length")"
           if [ "${recent}" -gt 0 ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
