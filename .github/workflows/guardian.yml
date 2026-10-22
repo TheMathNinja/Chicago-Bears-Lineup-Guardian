@@ -17,7 +17,8 @@ on:
         type: string
         default: ''
   schedule:
-    - cron: "*/5 * * * 4,5,6,0,1"
+    # Native Actions timing is a ten-minute fallback for the five-minute Apps Script scheduler.
+    - cron: "*/10 * * * 4,5,6,0,1"
 
 concurrency:
   group: lineup-guardian
@@ -25,6 +26,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   guardian:
@@ -40,14 +42,38 @@ jobs:
       RUN_MODE: ${{ inputs.noop && 'noop' || 'monitor' }}
       LIVE_LINEUP_WRITES: ${{ inputs.live || vars.LIVE_LINEUP_WRITES || 'false' }}
     steps:
-      - uses: actions/checkout@v5
+      - name: Suppress overlapping native backup run
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cutoff="$(date -u -d '8 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+          recent="$(gh run list --workflow guardian.yml --event workflow_dispatch --limit 20 \
+            --json createdAt,status --jq "[.[] | select(.createdAt >= \"${cutoff}\" and (.status == \"queued\" or .status == \"in_progress\" or .status == \"completed\"))] | length")"
+          if [ "${recent}" -gt 0 ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "The five-minute Apps Script scheduler is healthy; native backup is not needed."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "No recent Apps Script dispatch found; native backup will run."
+          fi
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v5
         with:
           ref: main
-      - uses: actions/setup-node@v5
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: npm test
+      - if: steps.gate.outputs.run == 'true'
+        run: npm test
       - name: Check configuration
+        if: steps.gate.outputs.run == 'true'
         id: configured
         shell: bash
         run: |
@@ -57,8 +83,8 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "Lineup Guardian is not credentialed yet; safely skipping the live-data worker."
           fi
-      - if: steps.configured.outputs.ready == 'true'
+      - if: steps.gate.outputs.run == 'true' && steps.configured.outputs.ready == 'true'
         run: npm run check
       - name: Commit audit state
-        if: steps.configured.outputs.ready == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.configured.outputs.ready == 'true'
         run: bash scripts/publish_audit_state.sh "Update lineup guardian audit"

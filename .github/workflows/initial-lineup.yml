@@ -22,6 +22,7 @@ concurrency:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   initial-lineup:
@@ -33,12 +34,36 @@ jobs:
       RUN_MODE: initial
       LIVE_LINEUP_WRITES: ${{ inputs.live || vars.LIVE_LINEUP_WRITES || 'false' }}
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-node@v5
+      - name: Suppress overlapping native backup run
+        id: gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          cutoff="$(date -u -d '8 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
+          recent="$(gh run list --workflow initial-lineup.yml --event workflow_dispatch --limit 10 \
+            --json createdAt,status --jq "[.[] | select(.createdAt >= \"${cutoff}\" and (.status == \"queued\" or .status == \"in_progress\" or .status == \"completed\"))] | length")"
+          if [ "${recent}" -gt 0 ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "Apps Script already dispatched the initial-lineup check."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "No recent Apps Script dispatch found; native backup will run."
+          fi
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/checkout@v5
+      - if: steps.gate.outputs.run == 'true'
+        uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: npm test
+      - if: steps.gate.outputs.run == 'true'
+        run: npm test
       - name: Check configuration
+        if: steps.gate.outputs.run == 'true'
         id: configured
         shell: bash
         run: |
@@ -48,8 +73,8 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "Initial lineup safety net is not credentialed yet; safely skipping."
           fi
-      - if: steps.configured.outputs.ready == 'true'
+      - if: steps.gate.outputs.run == 'true' && steps.configured.outputs.ready == 'true'
         run: npm run check
       - name: Commit audit state
-        if: steps.configured.outputs.ready == 'true'
+        if: steps.gate.outputs.run == 'true' && steps.configured.outputs.ready == 'true'
         run: bash scripts/publish_audit_state.sh "Update initial-lineup audit"
