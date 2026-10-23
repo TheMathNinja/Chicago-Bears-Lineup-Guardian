@@ -38,6 +38,19 @@ test("locked starters are preserved", () => {
   assert.ok(result.players.some((p) => p.id === "WR3"));
 });
 
+test("already-started locked players remain legal while later replacements are optimized", () => {
+  const pool = [
+    ...players("QB", [30]), ...players("RB", [20, 19]), ...players("WR", [18, 17, 16, 15]), ...players("TE", [14, 13]),
+    ...players("PK", [8]), ...players("PN", [7]), ...players("DT", [12, 11, 1]), ...players("DE", [12, 11, 10]),
+    ...players("LB", [15, 14, 13]), ...players("CB", [15, 14, 13, 12]), ...players("S", [15, 14, 13]),
+  ];
+  const locked = pool.find((p) => p.id === "WR3");
+  locked.eligible = false;
+  const result = optimizeLineup({ players: pool, rules, lockedStarterIds: [locked.id] });
+  assert.ok(result.players.some((p) => p.id === locked.id));
+  assert.equal(validateLineup(result.players, rules).valid, true);
+});
+
 test("ineligible players are never selected", () => {
   const pool = [
     ...players("QB", [30]), ...players("RB", [20, 19]), ...players("WR", [99, 18, 17, 16, 15]), ...players("TE", [14, 13]),

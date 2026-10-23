@@ -31,5 +31,5 @@ export function isInitialLineupRunDue(now, firstKickoff) {
   const current = easternParts(now);
   const first = easternParts(firstKickoff);
   return current.year === first.year && current.month === first.month && current.day === first.day &&
-    current.hour === "06" && Number(current.minute) < 15;
+    current.hour === "06";
 }

@@ -14,8 +14,9 @@ test("does not treat an inherited lineup as submitted", () => {
   assert.equal(lineupSubmissionStatus(html, "Chicago Bears", 5).status, "not_submitted");
 });
 
-test("6 a.m. gate is DST-safe and limited to first game day", () => {
+test("6 a.m. gate is DST-safe and allows the full hour on first game day", () => {
   assert.equal(isInitialLineupRunDue(new Date("2026-10-08T10:04:00Z"), new Date("2026-10-08T23:15:00Z")), true);
+  assert.equal(isInitialLineupRunDue(new Date("2026-10-08T10:59:00Z"), new Date("2026-10-08T23:15:00Z")), true);
   assert.equal(isInitialLineupRunDue(new Date("2026-10-08T11:04:00Z"), new Date("2026-10-08T23:15:00Z")), false);
   assert.equal(isInitialLineupRunDue(new Date("2026-10-07T10:04:00Z"), new Date("2026-10-08T23:15:00Z")), false);
 });

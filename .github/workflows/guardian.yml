@@ -21,7 +21,7 @@ on:
     - cron: "*/10 * * * 4,5,6,0,1"
 
 concurrency:
-  group: lineup-guardian
+  group: lineup-guardian-monitor
   cancel-in-progress: false
 
 permissions:
@@ -40,7 +40,7 @@ jobs:
       SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
       SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
       RUN_MODE: ${{ inputs.noop && 'noop' || 'monitor' }}
-      LIVE_LINEUP_WRITES: ${{ inputs.live || vars.LIVE_LINEUP_WRITES || 'false' }}
+      LIVE_LINEUP_WRITES: ${{ github.event_name == 'workflow_dispatch' && inputs.live && 'true' || github.event_name == 'schedule' && vars.LIVE_LINEUP_WRITES || 'false' }}
     steps:
       - name: Suppress overlapping native backup run
         id: gate
@@ -59,8 +59,21 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "The five-minute Apps Script scheduler is healthy; native backup is not needed."
           else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "No recent Apps Script dispatch found; native backup will run."
+            schedule="$(curl --fail --silent --show-error --max-time 20 \
+              'https://api.myfantasyleague.com/2026/export?TYPE=nflSchedule&JSON=1' || true)"
+            now_epoch="$(date -u +%s)"
+            due="$(jq --argjson now "$now_epoch" '
+              [.nflSchedule.matchup // []] | flatten |
+              map((.kickoff | tonumber) - $now) |
+              any(. >= 0 and . <= 5400)
+            ' <<<"$schedule" 2>/dev/null || echo unknown)"
+            if [ "$due" = "false" ]; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "Outside every NFL 90-minute kickoff window; native backup is not needed."
+            else
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              echo "No recent Apps Script dispatch found inside a kickoff window; native backup will run."
+            fi
           fi
       - if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@v5

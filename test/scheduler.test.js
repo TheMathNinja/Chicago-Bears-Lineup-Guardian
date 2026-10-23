@@ -50,6 +50,7 @@ test("initial-lineup dispatch is limited to 6 a.m. ET on first game day", () => 
   const kickoff = Date.parse("2026-10-23T00:15:00Z") / 1000;
   const context = schedulerContext([kickoff]);
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-22T10:05:00Z")).initial, true);
-  assert.equal(context.lineupGuardianDue_(new Date("2026-10-22T10:10:00Z")).initial, false);
+  assert.equal(context.lineupGuardianDue_(new Date("2026-10-22T10:59:00Z")).initial, true);
+  assert.equal(context.lineupGuardianDue_(new Date("2026-10-22T11:00:00Z")).initial, false);
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-21T10:05:00Z")).initial, false);
 });

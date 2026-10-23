@@ -63,8 +63,11 @@ function positionChoices(players, position, bounds, lockedIds) {
 
 export function optimizeLineup({ players, rules, lockedStarterIds = [], currentStarterIds = [] }) {
   const lockedIds = new Set(lockedStarterIds);
-  const eligible = players.filter((p) => p.eligible && Number.isFinite(p.projection));
-  const lockedMissing = [...lockedIds].filter((id) => !eligible.some((p) => p.id === id));
+  // Locked starters must survive a later submission even though their games
+  // have begun and they are no longer selectable as new starters.
+  const eligible = players.filter((p) =>
+    (p.eligible && Number.isFinite(p.projection)) || lockedIds.has(p.id));
+  const lockedMissing = [...lockedIds].filter((id) => !players.some((p) => p.id === id));
   if (lockedMissing.length) throw new Error(`Locked starters are missing or ineligible: ${lockedMissing.join(", ")}`);
 
   let states = [{ players: [], score: 0 }];
@@ -77,7 +80,8 @@ export function optimizeLineup({ players, rules, lockedStarterIds = [], currentS
         const offense = combined.filter((p) => GROUPS.offense.has(p.position)).length;
         const defense = combined.filter((p) => GROUPS.defense.has(p.position)).length;
         if (combined.length <= rules.total && offense <= rules.offense && defense <= rules.defense) {
-          next.push({ players: combined, score: state.score + choice.reduce((s, p) => s + p.projection, 0) });
+          next.push({ players: combined, score: state.score + choice.reduce((s, p) =>
+            s + (Number.isFinite(p.projection) ? p.projection : 0), 0) });
         }
       }
     }

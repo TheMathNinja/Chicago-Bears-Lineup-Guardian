@@ -98,7 +98,7 @@ function lineupGuardianDue_(now) {
   const easternDate = Utilities.formatDate(now, 'America/New_York', 'yyyy-MM-dd');
   const firstKickoffDate = Utilities.formatDate(firstKickoff, 'America/New_York', 'yyyy-MM-dd');
   const easternClock = Utilities.formatDate(now, 'America/New_York', 'HH:mm');
-  const initial = easternDate === firstKickoffDate && easternClock >= '06:00' && easternClock < '06:10';
+  const initial = easternDate === firstKickoffDate && easternClock >= '06:00' && easternClock < '07:00';
   const nextKickoff = kickoffs.filter(function(kickoff) {
     return kickoff.getTime() > now.getTime();
   })[0];

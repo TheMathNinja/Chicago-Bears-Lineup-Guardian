@@ -17,7 +17,7 @@ on:
     - cron: "4 10,11 * 9-12 0-6"
 
 concurrency:
-  group: lineup-guardian
+  group: lineup-guardian-initial
   cancel-in-progress: false
 
 permissions:
@@ -32,7 +32,7 @@ jobs:
       MFL_USERNAME: ${{ secrets.MFL_USERNAME }}
       MFL_PASSWORD: ${{ secrets.MFL_PASSWORD }}
       RUN_MODE: initial
-      LIVE_LINEUP_WRITES: ${{ inputs.live || vars.LIVE_LINEUP_WRITES || 'false' }}
+      LIVE_LINEUP_WRITES: ${{ github.event_name == 'workflow_dispatch' && inputs.live && 'true' || github.event_name == 'schedule' && vars.LIVE_LINEUP_WRITES || 'false' }}
     steps:
       - name: Suppress overlapping native backup run
         id: gate
@@ -51,8 +51,23 @@ jobs:
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "Apps Script already dispatched the initial-lineup check."
           else
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            echo "No recent Apps Script dispatch found; native backup will run."
+            schedule="$(curl --fail --silent --show-error --max-time 20 \
+              'https://api.myfantasyleague.com/2026/export?TYPE=nflSchedule&JSON=1' || true)"
+            first_kickoff="$(jq -r '[.nflSchedule.matchup // []] | flatten | map(.kickoff | tonumber) | min // empty' \
+              <<<"$schedule" 2>/dev/null || true)"
+            today_et="$(TZ=America/New_York date +%F)"
+            hour_et="$(TZ=America/New_York date +%H)"
+            first_date_et=""
+            if [ -n "$first_kickoff" ]; then
+              first_date_et="$(TZ=America/New_York date -d "@$first_kickoff" +%F)"
+            fi
+            if [ -n "$first_date_et" ] && { [ "$today_et" != "$first_date_et" ] || [ "$hour_et" != "06" ]; }; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "Not the 6 a.m. ET hour on the first NFL game day; native backup is not needed."
+            else
+              echo "run=true" >> "$GITHUB_OUTPUT"
+              echo "No recent Apps Script dispatch in the safety-net window; native backup will run."
+            fi
           fi
       - if: steps.gate.outputs.run == 'true'
         uses: actions/checkout@v5

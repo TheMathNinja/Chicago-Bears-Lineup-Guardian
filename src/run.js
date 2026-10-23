@@ -137,6 +137,7 @@ async function processLeague(league, cookie) {
 
   if (runMode === "initial") return processInitialLineup(league, cookie, snapshot, pool, allKickoffs[0], base);
   if (runMode === "noop") {
+    if (dryRun) throw new Error("No-op submission requires an explicit live=true workflow dispatch");
     const existingIds = String(snapshot.franchise.starters || "").split(",").filter(Boolean).sort();
     if (!existingIds.length) throw new Error(`No existing Week ${snapshot.week} lineup is available for a no-op test`);
     const fresh = await readLeague(league, cookie);
@@ -156,7 +157,11 @@ async function processLeague(league, cookie) {
   }
 
   if (!inAnyRosterWindow && !firstKickoffWindow) return { ...base, status: "idle", message: "Outside the 90-minute monitoring window." };
-  if (!dueUnavailable.length) return { ...base, status: "ok", message: "Fresh roster, injury, bye, lineup, kickoff, and projection checks passed." };
+  if (!dueUnavailable.length) {
+    const detail = `Week ${snapshot.week}: fresh roster, injury, bye, lineup, kickoff, and projection checks passed`;
+    event(league.key, "ACTIVE WINDOW CHECK PASSED", detail);
+    return { ...base, status: "ok", message: `${detail}.` };
+  }
 
   const rules = parseRules(snapshot.leagueData.league);
   const currentStarterIds = pool.filter((p) => p.starter).map((p) => p.id);
