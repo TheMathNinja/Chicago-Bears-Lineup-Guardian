@@ -30,7 +30,7 @@ permissions:
 
 jobs:
   guardian:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     env:
       MFL_USERNAME: ${{ secrets.MFL_USERNAME }}
