@@ -23,22 +23,34 @@
       "league": "FAFL",
       "action": "ACTIVE WINDOW CHECK PASSED",
       "detail": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed"
+    },
+    {
+      "time": "2026-10-25T20:07:20.882Z",
+      "league": "ADL",
+      "action": "ACTIVE WINDOW CHECK PASSED",
+      "detail": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed"
+    },
+    {
+      "time": "2026-10-25T20:07:20.882Z",
+      "league": "FAFL",
+      "action": "ACTIVE WINDOW CHECK PASSED",
+      "detail": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed"
     }
   ],
   "leagues": [
     {
       "key": "ADL",
       "week": 7,
-      "checkedAt": "2026-10-25T20:03:11.493Z",
-      "nextKickoff": "2026-10-25T20:05:00.000Z",
+      "checkedAt": "2026-10-25T20:07:20.882Z",
+      "nextKickoff": "2026-10-25T20:25:00.000Z",
       "status": "ok",
       "message": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed."
     },
     {
       "key": "FAFL",
       "week": 7,
-      "checkedAt": "2026-10-25T20:03:11.493Z",
-      "nextKickoff": "2026-10-25T20:05:00.000Z",
+      "checkedAt": "2026-10-25T20:07:20.882Z",
+      "nextKickoff": "2026-10-25T20:25:00.000Z",
       "status": "ok",
       "message": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed."
     }
