@@ -24,15 +24,19 @@ function schedulerContext(kickoffs, options = {}) {
   let fetchCount = 0;
   const context = {
     UrlFetchApp: {
-      fetch() {
+      fetchAll(requests) {
         fetchCount += 1;
         if (options.fetchError) throw new Error(options.fetchError);
-        return {
+        const response = {
           getResponseCode: () => 200,
           getContentText: () => JSON.stringify({
             nflSchedule: { matchup: kickoffs.map((kickoff) => ({ kickoff: String(kickoff) })) },
           }),
         };
+        return requests.map((_, index) => index === 0 ? response : {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({nflSchedule: {matchup: []}}),
+        });
       },
     },
     Utilities: { formatDate: formatEastern },
@@ -87,4 +91,11 @@ test("stale kickoff cache keeps scheduler safe during an MFL outage", () => {
   const due = context.lineupGuardianDue_(new Date("2026-10-22T22:45:00Z"), context.testProperties);
   assert.equal(due.monitor, true);
   assert.equal(context.fetchCount(), 1);
+});
+
+test("explicit weekly schedules preserve the current Sunday after MFL default-week rollover", () => {
+  const sundayKickoff = Date.parse("2026-10-25T20:25:00Z") / 1000;
+  const context = schedulerContext([sundayKickoff]);
+  const due = context.lineupGuardianDue_(new Date("2026-10-25T19:00:00Z"), context.testProperties);
+  assert.equal(due.monitor, true);
 });

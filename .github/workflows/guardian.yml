@@ -42,51 +42,17 @@ jobs:
       RUN_MODE: ${{ inputs.noop && 'noop' || 'monitor' }}
       LIVE_LINEUP_WRITES: ${{ github.event_name == 'workflow_dispatch' && inputs.live && 'true' || github.event_name == 'schedule' && vars.LIVE_LINEUP_WRITES || 'false' }}
     steps:
-      - name: Suppress overlapping native backup run
-        id: gate
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" != "schedule" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          cutoff="$(date -u -d '8 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
-          recent="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow guardian.yml --event workflow_dispatch --limit 20 \
-            --json createdAt,status --jq "[.[] | select(.createdAt >= \"${cutoff}\" and (.status == \"queued\" or .status == \"in_progress\" or .status == \"completed\"))] | length")"
-          if [ "${recent}" -gt 0 ]; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "The five-minute Apps Script scheduler is healthy; native backup is not needed."
-          else
-            schedule="$(curl --fail --silent --show-error --max-time 20 \
-              'https://api.myfantasyleague.com/2026/export?TYPE=nflSchedule&JSON=1' || true)"
-            now_epoch="$(date -u +%s)"
-            due="$(jq --argjson now "$now_epoch" '
-              [.nflSchedule.matchup // []] | flatten |
-              map((.kickoff | tonumber) - $now) |
-              any(. >= 0 and . <= 5400)
-            ' <<<"$schedule" 2>/dev/null || echo unknown)"
-            if [ "$due" = "false" ]; then
-              echo "run=false" >> "$GITHUB_OUTPUT"
-              echo "Outside every NFL 90-minute kickoff window; native backup is not needed."
-            else
-              echo "run=true" >> "$GITHUB_OUTPUT"
-              echo "No recent Apps Script dispatch found inside a kickoff window; native backup will run."
-            fi
-          fi
-      - if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@v5
+      # Always run the league-aware worker. It reads each roster's current week before
+      # deciding whether a player is inside the 90-minute window, and is inexpensive
+      # outside that window. A scheduler-level week guess can suppress a needed check.
+      - uses: actions/checkout@v5
         with:
           ref: main
-      - if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-node@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - if: steps.gate.outputs.run == 'true'
-        run: npm test
+      - run: npm test
       - name: Check configuration
-        if: steps.gate.outputs.run == 'true'
         id: configured
         shell: bash
         run: |
@@ -96,8 +62,8 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "Lineup Guardian is not credentialed yet; safely skipping the live-data worker."
           fi
-      - if: steps.gate.outputs.run == 'true' && steps.configured.outputs.ready == 'true'
+      - if: steps.configured.outputs.ready == 'true'
         run: npm run check
       - name: Commit audit state
-        if: steps.gate.outputs.run == 'true' && steps.configured.outputs.ready == 'true'
+        if: steps.configured.outputs.ready == 'true'
         run: bash scripts/publish_audit_state.sh "Update lineup guardian audit"
