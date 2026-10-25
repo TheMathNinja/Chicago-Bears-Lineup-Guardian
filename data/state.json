@@ -47,24 +47,36 @@
       "league": "FAFL",
       "action": "NO-OP SUBMISSION VERIFIED",
       "detail": "21 unchanged Week 7 starters"
+    },
+    {
+      "time": "2026-10-25T20:15:55.483Z",
+      "league": "ADL",
+      "action": "ACTIVE WINDOW CHECK PASSED",
+      "detail": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed"
+    },
+    {
+      "time": "2026-10-25T20:15:55.483Z",
+      "league": "FAFL",
+      "action": "ACTIVE WINDOW CHECK PASSED",
+      "detail": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed"
     }
   ],
   "leagues": [
     {
       "key": "ADL",
       "week": 7,
-      "checkedAt": "2026-10-25T20:13:47.399Z",
+      "checkedAt": "2026-10-25T20:15:55.483Z",
       "nextKickoff": "2026-10-25T20:25:00.000Z",
-      "status": "idle",
-      "message": "Not the 6:00 a.m. ET first-game-day safety-net window."
+      "status": "ok",
+      "message": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed."
     },
     {
       "key": "FAFL",
       "week": 7,
-      "checkedAt": "2026-10-25T20:13:47.399Z",
+      "checkedAt": "2026-10-25T20:15:55.483Z",
       "nextKickoff": "2026-10-25T20:25:00.000Z",
-      "status": "idle",
-      "message": "Not the 6:00 a.m. ET first-game-day safety-net window."
+      "status": "ok",
+      "message": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed."
     }
   ]
 }
