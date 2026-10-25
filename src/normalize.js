@@ -3,7 +3,8 @@ const ILLEGAL = new Set(["O", "I", "IR", "IR-R", "IR-D", "IR-PUP", "PUP", "H", "
 export function normalizeStatus(value) {
   const status = String(value || "").trim().toUpperCase().replace(/[()]/g, "");
   if (!status) return "";
-  if (status.startsWith("IR") || status.includes("INJURED RESERVE") || status.includes("PUP")) return "IR";
+  if (status.startsWith("IR") || status.includes("INJURED RESERVE") ||
+      status.includes("RESERVE/INJURED") || status.includes("PUP")) return "IR";
   if (status === "OUT") return "O";
   if (status === "HOLDOUT") return "H";
   if (status === "SUSPENDED" || status === "SUSPENSION") return "S";

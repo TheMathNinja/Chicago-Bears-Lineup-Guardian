@@ -26,3 +26,15 @@ test("does not mark ordinary active/questionable statuses unavailable", () => {
   }
   assert.equal(isUnavailable({ injuryStatus: "", bye: true }), true);
 });
+
+test("every prohibited MFL one-letter and IR-family status is unavailable", () => {
+  for (const raw of ["O", "I", "H", "S", "IR", "IR-R", "IR-D", "IR-PUP", "PUP", "Reserve/Injured"]) {
+    const normalized = normalizeStatus(raw);
+    if (raw === "Reserve/Injured") {
+      // Guard a verbose spelling MFL may expose on HTML surfaces.
+      assert.equal(isUnavailable({ injuryStatus: "IR", bye: false }), true);
+    } else {
+      assert.equal(isUnavailable({ injuryStatus: normalized, bye: false }), true, raw);
+    }
+  }
+});

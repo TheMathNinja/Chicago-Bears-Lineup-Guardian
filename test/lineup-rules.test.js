@@ -74,3 +74,21 @@ test("missing projections remain last-resort legal replacements", () => {
   assert.equal(validateLineup(result.players, rules).valid, true);
   assert.ok(result.players.some((player) => player.id === onlyQuarterback.id));
 });
+
+test("multiple inactive starters can be replaced across different eligible positions", () => {
+  const pool = [
+    ...players("QB", [30]), ...players("RB", [20, 19]), ...players("WR", [18, 17, 16, 15]), ...players("TE", [14, 13]),
+    ...players("PK", [8]), ...players("PN", [7]), ...players("DT", [12, 11, 1]), ...players("DE", [12, 11, 10]),
+    ...players("LB", [15, 14, 13]), ...players("CB", [15, 14, 13, 12]), ...players("S", [15, 14, 13]),
+  ];
+  const initial = optimizeLineup({ players: pool, rules }).players;
+  const inactive = [initial.find((player) => player.position === "WR"), initial.find((player) => player.position === "DE")];
+  for (const player of inactive) player.eligible = false;
+  const result = optimizeLineup({
+    players: pool,
+    rules,
+    currentStarterIds: initial.map((player) => player.id),
+  });
+  assert.equal(validateLineup(result.players, rules).valid, true);
+  for (const player of inactive) assert.ok(!result.players.some((candidate) => candidate.id === player.id));
+});
