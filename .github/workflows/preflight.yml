@@ -1,0 +1,29 @@
+name: Chicago Bears Lineup Guardian Preflight
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Wednesday noon ET after the DST transition; 1 p.m. while EDT is active.
+    - cron: "0 17 * 9-12 3"
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      MFL_USERNAME: ${{ secrets.MFL_USERNAME }}
+      MFL_PASSWORD: ${{ secrets.MFL_PASSWORD }}
+      LIVE_LINEUP_WRITES: "false"
+      RUN_MODE: monitor
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+      - name: Validate all guardian invariants
+        run: npm test
+      - name: Verify credentials, league ownership, and live MFL inputs
+        run: npm run check
