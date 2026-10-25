@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { dryRun, loadLeagues, lookaheadMinutes, requireCredentials, season } from "./config.js";
 import { writeDashboard } from "./dashboard.js";
-import { optimizeLineup, parseRules, validateLineup } from "./lineup-rules.js";
+import { optimizeActiveLineup, optimizeLineup, parseRules, validateLineup } from "./lineup-rules.js";
 import { getByeTeams, getPlayerRows, mapKickoffs } from "./lineup-data.js";
 import { exportJson, login, promoteTaxiPlayers, requestText, sendMflEmail, submitLineup, verifyLogin } from "./mfl.js";
 import { isUnavailable, rows } from "./normalize.js";
@@ -76,6 +76,11 @@ async function promoteTaxiSelections({ league, cookie, snapshot, proposal, rules
   }
 
   const refreshed = await readLeague(league, cookie);
+  const refreshedStarterIds = String(refreshed.franchise.starters || "").split(",").filter(Boolean).sort();
+  const originalStarterIds = String(snapshot.franchise.starters || "").split(",").filter(Boolean).sort();
+  if (refreshed.week !== snapshot.week || refreshedStarterIds.join(",") !== originalStarterIds.join(",")) {
+    throw new Error("Week or lineup changed during Taxi promotion; refusing stale lineup submission");
+  }
   const rosterPlayers = rows(refreshed.roster.rosters?.franchise?.player);
   const statusById = new Map(rosterPlayers.map((player) => [player.id, player.status]));
   const notPromoted = taxiIds.filter((id) => statusById.get(id) !== "ROSTER");
@@ -85,14 +90,14 @@ async function promoteTaxiSelections({ league, cookie, snapshot, proposal, rules
     const activePool = getPlayerRows({
       ...refreshed, starters: refreshed.franchise, byeTeams: getByeTeams(refreshed.byes), now,
     }).map((player) => ({ ...player, eligible: player.eligible && player.rosterStatus === "ROSTER" }));
-    const activeProposal = optimizeLineup({ players: activePool, rules, currentStarterIds });
+    const activeProposal = optimizeActiveLineup({ players: activePool, rules, currentStarterIds });
     return { snapshot: refreshed, proposal: activeProposal, promotedIds: taxiIds.filter((id) => statusById.get(id) === "ROSTER") };
   }
 
   const refreshedPool = getPlayerRows({
     ...refreshed, starters: refreshed.franchise, byeTeams: getByeTeams(refreshed.byes), now,
   });
-  const refreshedProposal = optimizeLineup({ players: refreshedPool, rules, currentStarterIds });
+  const refreshedProposal = optimizeActiveLineup({ players: refreshedPool, rules, currentStarterIds });
   const stillTaxi = taxiIdsInProposal(refreshedProposal);
   if (stillTaxi.length) {
     throw new Error(`Optimizer selected unpromoted Taxi player(s) after promotion read-back: ${stillTaxi.join(", ")}`);

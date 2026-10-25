@@ -95,3 +95,12 @@ export function optimizeLineup({ players, rules, lockedStarterIds = [], currentS
   if (!legal.length) throw new Error("No fully legal lineup can be formed from eligible, unlocked players");
   return legal[0];
 }
+
+export function optimizeActiveLineup({ players, rules, currentStarterIds = [] }) {
+  return optimizeLineup({
+    players: players.map((player) => ({ ...player, eligible: player.eligible && player.rosterStatus === "ROSTER" })),
+    rules,
+    currentStarterIds,
+    lockedStarterIds: players.filter((player) => player.starter && player.gameLocked).map((player) => player.id),
+  });
+}

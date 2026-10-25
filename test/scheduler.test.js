@@ -29,7 +29,7 @@ function schedulerContext(kickoffs, options = {}) {
         if (options.fetchError) throw new Error(options.fetchError);
         if (url.includes("TYPE=rosters")) return {
           getResponseCode: () => 200,
-          getContentText: () => JSON.stringify({rosters: {franchise: {week: "7"}}}),
+          getContentText: () => JSON.stringify({rosters: {franchise: {week: String(options.week || 7)}}}),
         };
         return {
           getResponseCode: () => 200,
@@ -128,4 +128,23 @@ test("multiple kickoff groups each receive their own monitor window", () => {
   assert.equal(context.lineupGuardianDue_(new Date(early - 30 * 60000), context.testProperties).monitor, true);
   const secondContext = schedulerContext([early / 1000, late / 1000]);
   assert.equal(secondContext.lineupGuardianDue_(new Date(late - 30 * 60000), secondContext.testProperties).monitor, true);
+});
+
+test("Week 8 actual kickoff groups and first-game safety net survive the November DST change", () => {
+  const kickoffs = [
+    "2026-10-30T00:15:00Z",
+    "2026-11-01T18:00:00Z",
+    "2026-11-01T21:05:00Z",
+    "2026-11-01T21:25:00Z",
+    "2026-11-02T01:20:00Z",
+    "2026-11-03T01:15:00Z",
+  ].map(Date.parse);
+  for (const kickoff of kickoffs) {
+    const context = schedulerContext(kickoffs.map((time) => time / 1000), { week: 8 });
+    assert.equal(context.lineupGuardianDue_(new Date(kickoff - 90 * 60000), context.testProperties).monitor, true);
+    assert.equal(context.lineupGuardianDue_(new Date(kickoff - 10 * 60000), context.testProperties).monitor, true);
+  }
+  const context = schedulerContext(kickoffs.map((time) => time / 1000), { week: 8 });
+  assert.equal(context.lineupGuardianDue_(new Date("2026-10-29T10:05:00Z"), context.testProperties).initial, true);
+  assert.equal(context.lineupGuardianDue_(new Date("2026-10-29T11:05:00Z"), context.testProperties).initial, false);
 });

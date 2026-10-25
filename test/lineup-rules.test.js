@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { optimizeLineup, validateLineup } from "../src/lineup-rules.js";
+import { optimizeActiveLineup, optimizeLineup, validateLineup } from "../src/lineup-rules.js";
 
 const rules = {
   total: 21, offense: 7, defense: 12,
@@ -14,6 +14,18 @@ const rules = {
 function players(position, scores) {
   return scores.map((projection, i) => ({ id: `${position}${i}`, position, projection, eligible: true }));
 }
+
+test("post-promotion and Active-only fallback preserve locked starters and exclude remaining Taxi", () => {
+  const simpleRules = { total: 2, offense: 2, defense: 0, positions: { QB: { min: 1, max: 1 }, WR: { min: 1, max: 1 } } };
+  const pool = [
+    { id: "locked", position: "QB", projection: 5, rosterStatus: "ROSTER", starter: true, gameLocked: true, eligible: false },
+    { id: "benchQB", position: "QB", projection: 50, rosterStatus: "ROSTER", eligible: true },
+    { id: "promoted", position: "WR", projection: 10, rosterStatus: "ROSTER", eligible: true },
+    { id: "taxi", position: "WR", projection: 100, rosterStatus: "TAXI_SQUAD", eligible: true },
+  ];
+  const result = optimizeActiveLineup({ players: pool, rules: simpleRules });
+  assert.deepEqual(result.players.map((player) => player.id).sort(), ["locked", "promoted"]);
+});
 
 test("optimizer searches all eligible positions and returns a complete legal lineup", () => {
   const pool = [
