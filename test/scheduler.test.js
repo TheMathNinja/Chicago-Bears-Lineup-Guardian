@@ -24,19 +24,19 @@ function schedulerContext(kickoffs, options = {}) {
   let fetchCount = 0;
   const context = {
     UrlFetchApp: {
-      fetchAll(requests) {
+      fetch(url) {
         fetchCount += 1;
         if (options.fetchError) throw new Error(options.fetchError);
-        const response = {
+        if (url.includes("TYPE=rosters")) return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify({rosters: {franchise: {week: "7"}}}),
+        };
+        return {
           getResponseCode: () => 200,
           getContentText: () => JSON.stringify({
             nflSchedule: { matchup: kickoffs.map((kickoff) => ({ kickoff: String(kickoff) })) },
           }),
         };
-        return requests.map((_, index) => index === 0 ? response : {
-          getResponseCode: () => 200,
-          getContentText: () => JSON.stringify({nflSchedule: {matchup: []}}),
-        });
       },
     },
     Utilities: { formatDate: formatEastern },
@@ -58,7 +58,7 @@ test("precision scheduler is active only inside a real 90-minute kickoff window"
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-22T22:45:00Z"), context.testProperties).monitor, true);
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-22T22:44:59Z"), context.testProperties).monitor, false);
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-23T00:15:01Z"), context.testProperties).monitor, false);
-  assert.equal(context.fetchCount(), 1);
+  assert.equal(context.fetchCount(), 2);
 });
 
 test("initial-lineup dispatch is limited to 6 a.m. ET on first game day", () => {
@@ -76,7 +76,7 @@ test("kickoff schedule is cached instead of fetched every five minutes", () => {
   const first = new Date("2026-10-22T20:00:00Z");
   context.lineupGuardianDue_(first, context.testProperties);
   context.lineupGuardianDue_(new Date(first.getTime() + 5 * 60000), context.testProperties);
-  assert.equal(context.fetchCount(), 1);
+  assert.equal(context.fetchCount(), 2);
 });
 
 test("stale kickoff cache keeps scheduler safe during an MFL outage", () => {

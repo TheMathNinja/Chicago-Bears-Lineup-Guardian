@@ -84,42 +84,41 @@ function lineupGuardianFetchKickoffs_(now, props) {
     return {kickoffs: cached, source: 'cached'};
   }
 
-  let responses;
+  let response;
   try {
     // MFL's unqualified nflSchedule endpoint can roll to the next fantasy week
-    // before the current Sunday's games. Request every week explicitly and use
-    // the timestamps themselves, so the scheduler cannot silently skip a window.
-    const requests = [];
-    for (let week = 1; week <= 18; week++) {
-      requests.push({
-        url: 'https://api.myfantasyleague.com/' + LINEUP_GUARDIAN.season +
-          '/export?TYPE=nflSchedule&JSON=1&W=' + week,
-        muteHttpExceptions: true
-      });
-    }
-    responses = UrlFetchApp.fetchAll(requests);
+    // before the current Sunday's games. The Bears roster response carries the
+    // active lineup week, so use it to qualify the schedule request explicitly.
+    const rosterResponse = UrlFetchApp.fetch(
+      'https://api.myfantasyleague.com/' + LINEUP_GUARDIAN.season +
+        '/export?TYPE=rosters&L=60206&FRANCHISE=0005&JSON=1',
+      {muteHttpExceptions: true}
+    );
+    if (rosterResponse.getResponseCode() !== 200) throw new Error('ADL roster week unavailable');
+    const rosterPayload = JSON.parse(rosterResponse.getContentText());
+    const currentWeek = Number(rosterPayload.rosters && rosterPayload.rosters.franchise &&
+      rosterPayload.rosters.franchise.week);
+    if (!Number.isFinite(currentWeek)) throw new Error('ADL roster response omitted the current week');
+    response = UrlFetchApp.fetch(
+      'https://api.myfantasyleague.com/' + LINEUP_GUARDIAN.season +
+        '/export?TYPE=nflSchedule&JSON=1&W=' + currentWeek,
+      {muteHttpExceptions: true}
+    );
   } catch (error) {
     return {kickoffs: cached, source: cached.length ? 'stale cache' : 'unavailable',
       error: 'MFL NFL schedule request failed; native GitHub backup remains active: ' + error.message};
   }
-  const successful = responses.filter(function(response) {
-    return response.getResponseCode() === 200;
-  });
-  if (!successful.length) {
+  if (response.getResponseCode() !== 200) {
     return {kickoffs: cached, source: cached.length ? 'stale cache' : 'unavailable',
-      error: 'MFL NFL schedules were unavailable; native GitHub backup remains active'};
+      error: 'MFL NFL schedule was unavailable; native GitHub backup remains active'};
   }
 
-  const kickoffs = [];
-  successful.forEach(function(response) {
-    const payload = JSON.parse(response.getContentText());
-    const matchups = (payload.nflSchedule && payload.nflSchedule.matchup) || [];
-    const rows = Array.isArray(matchups) ? matchups : [matchups];
-    rows.forEach(function(matchup) {
-      kickoffs.push(Number(matchup.kickoff) * 1000);
-    });
-  });
-  const validKickoffs = kickoffs.filter(function(kickoff) {
+  const payload = JSON.parse(response.getContentText());
+  const matchups = (payload.nflSchedule && payload.nflSchedule.matchup) || [];
+  const rows = Array.isArray(matchups) ? matchups : [matchups];
+  const validKickoffs = rows.map(function(matchup) {
+    return Number(matchup.kickoff) * 1000;
+  }).filter(function(kickoff) {
     return Number.isFinite(kickoff) && kickoff > 0;
   }).sort(function(a, b) {
     return a - b;
