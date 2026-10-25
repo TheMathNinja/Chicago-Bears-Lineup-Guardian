@@ -11,24 +11,36 @@
       "league": "FAFL",
       "action": "NO-OP SUBMISSION VERIFIED",
       "detail": "21 unchanged Week 4 starters"
+    },
+    {
+      "time": "2026-10-25T20:03:11.493Z",
+      "league": "ADL",
+      "action": "ACTIVE WINDOW CHECK PASSED",
+      "detail": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed"
+    },
+    {
+      "time": "2026-10-25T20:03:11.493Z",
+      "league": "FAFL",
+      "action": "ACTIVE WINDOW CHECK PASSED",
+      "detail": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed"
     }
   ],
   "leagues": [
     {
       "key": "ADL",
       "week": 7,
-      "checkedAt": "2026-10-23T15:41:27.527Z",
-      "nextKickoff": "2026-10-25T13:30:00.000Z",
-      "status": "idle",
-      "message": "Outside the 90-minute monitoring window."
+      "checkedAt": "2026-10-25T20:03:11.493Z",
+      "nextKickoff": "2026-10-25T20:05:00.000Z",
+      "status": "ok",
+      "message": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed."
     },
     {
       "key": "FAFL",
       "week": 7,
-      "checkedAt": "2026-10-23T15:41:27.527Z",
-      "nextKickoff": "2026-10-25T13:30:00.000Z",
-      "status": "idle",
-      "message": "Outside the 90-minute monitoring window."
+      "checkedAt": "2026-10-25T20:03:11.493Z",
+      "nextKickoff": "2026-10-25T20:05:00.000Z",
+      "status": "ok",
+      "message": "Week 7: fresh roster, injury, bye, lineup, kickoff, and projection checks passed."
     }
   ]
 }
