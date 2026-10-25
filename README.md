@@ -4,6 +4,8 @@ Personal game-day lineup protection for franchise `0005` in ADL (`60206`) and FA
 
 The guardian polls during NFL game windows, identifies unavailable starters, and computes the highest-projected **complete legal lineup**. It searches every eligible starting position instead of requiring a same-position replacement. Locked starters are preserved.
 
+Active and Taxi players are considered as replacement candidates. When the optimal replacement is on Taxi, the guardian first promotes that player to Active through MFL's Taxi Squad transaction endpoint, verifies the roster move in a fresh scrape, and only then submits and verifies the lineup. If MFL rejects the promotion, it falls back to the best legal Active-only lineup.
+
 ## Safety contract
 
 - `LIVE_LINEUP_WRITES` defaults to `false`.

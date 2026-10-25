@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { login, requestText } from "../src/mfl.js";
+import { login, promoteTaxiPlayers, requestText } from "../src/mfl.js";
 
 test("MFL XML login response shape is documented", () => {
   const xml = '<status MFL_USER_ID="cookie-value" />';
@@ -88,4 +88,24 @@ test("MFL reads stop after the bounded retry limit", async (t) => {
 
   await assert.rejects(() => requestText("https://example.test/read"), /MFL 503/);
   assert.equal(attempts, 4);
+});
+
+test("Taxi promotion uses MFL's official two-step roster-move endpoint", async (t) => {
+  const originalFetch = global.fetch;
+  t.after(() => { global.fetch = originalFetch; });
+  let captured;
+  global.fetch = async (url, options) => {
+    captured = { url, options };
+    return new Response('{"status":"OK"}', { status: 200 });
+  };
+
+  await promoteTaxiPlayers({
+    season: 2026, webHost: "www46.myfantasyleague.com", leagueId: "60206",
+    playerIds: ["111", "222"], cookie: "cookie-value",
+  });
+
+  assert.match(captured.url, /TYPE=taxi_squad&L=60206/);
+  assert.equal(captured.options.method, "POST");
+  assert.equal(captured.options.body.get("PROMOTE"), "111,222");
+  assert.equal(captured.options.body.get("JSON"), "1");
 });

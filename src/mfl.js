@@ -91,6 +91,18 @@ export async function submitLineup({ season, webHost, leagueId, week, starterIds
   return result;
 }
 
+export async function promoteTaxiPlayers({ season, webHost, leagueId, playerIds, cookie }) {
+  if (!playerIds.length) return;
+  const body = new URLSearchParams({
+    PROMOTE: playerIds.join(","),
+    JSON: "1",
+  });
+  const text = await request(`https://${webHost}/${season}/import?TYPE=taxi_squad&L=${encodeURIComponent(leagueId)}`, {
+    cookie, method: "POST", body,
+  });
+  if (/error/i.test(text)) throw new Error(`MFL rejected Taxi promotion: ${text.slice(0, 500)}`);
+}
+
 export async function sendMflEmail({ season, webHost, leagueId, franchiseId, subject, message, cookie }) {
   const body = new URLSearchParams({
     SEND_TO: franchiseId,

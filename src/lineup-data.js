@@ -25,6 +25,7 @@ export function getPlayerRows({ players, roster, injuries, projections, starters
     const bye = byeTeams.has(player.team);
     const kickoff = kickoffs.get(player.team);
     const gameLocked = Boolean(kickoff && kickoff <= now);
+    const lineupEligibleList = rosterPlayer.status === "ROSTER" || rosterPlayer.status === "TAXI_SQUAD";
     return {
       id: rosterPlayer.id,
       name: player.name || rosterPlayer.id,
@@ -36,7 +37,8 @@ export function getPlayerRows({ players, roster, injuries, projections, starters
       kickoff,
       starter: starterIds.has(rosterPlayer.id),
       gameLocked,
-      eligible: rosterPlayer.status === "ROSTER" && !gameLocked && !isUnavailable({ injuryStatus, bye }),
+      rosterStatus: rosterPlayer.status,
+      eligible: lineupEligibleList && !gameLocked && !isUnavailable({ injuryStatus, bye }),
     };
   });
 }

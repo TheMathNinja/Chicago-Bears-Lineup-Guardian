@@ -3,7 +3,7 @@ import { dryRun, loadLeagues, lookaheadMinutes, requireCredentials, season } fro
 import { writeDashboard } from "./dashboard.js";
 import { optimizeLineup, parseRules, validateLineup } from "./lineup-rules.js";
 import { getByeTeams, getPlayerRows, mapKickoffs } from "./lineup-data.js";
-import { exportJson, login, requestText, sendMflEmail, submitLineup, verifyLogin } from "./mfl.js";
+import { exportJson, login, promoteTaxiPlayers, requestText, sendMflEmail, submitLineup, verifyLogin } from "./mfl.js";
 import { isUnavailable, rows } from "./normalize.js";
 import { isInitialLineupRunDue, lineupSubmissionStatus } from "./submission-status.js";
 
@@ -58,6 +58,48 @@ async function readSubmissionStatus(league, week, cookie) {
   return lineupSubmissionStatus(html, "Chicago Bears", week);
 }
 
+function taxiIdsInProposal(proposal) {
+  return proposal.players.filter((player) => player.rosterStatus === "TAXI_SQUAD").map((player) => player.id);
+}
+
+async function promoteTaxiSelections({ league, cookie, snapshot, proposal, rules, currentStarterIds = [] }) {
+  const taxiIds = taxiIdsInProposal(proposal);
+  if (!taxiIds.length) return { snapshot, proposal, promotedIds: [] };
+
+  let promotionError;
+  try {
+    await promoteTaxiPlayers({
+      season, webHost: league.webHost, leagueId: league.leagueId, playerIds: taxiIds, cookie,
+    });
+  } catch (error) {
+    promotionError = error;
+  }
+
+  const refreshed = await readLeague(league, cookie);
+  const rosterPlayers = rows(refreshed.roster.rosters?.franchise?.player);
+  const statusById = new Map(rosterPlayers.map((player) => [player.id, player.status]));
+  const notPromoted = taxiIds.filter((id) => statusById.get(id) !== "ROSTER");
+  if (promotionError || notPromoted.length) {
+    const reason = promotionError?.message || `MFL did not move player(s) ${notPromoted.join(", ")} to Active`;
+    console.warn(`${league.key}: Taxi promotion unavailable; trying the best Active-only lineup. ${reason}`);
+    const activePool = getPlayerRows({
+      ...refreshed, starters: refreshed.franchise, byeTeams: getByeTeams(refreshed.byes), now,
+    }).map((player) => ({ ...player, eligible: player.eligible && player.rosterStatus === "ROSTER" }));
+    const activeProposal = optimizeLineup({ players: activePool, rules, currentStarterIds });
+    return { snapshot: refreshed, proposal: activeProposal, promotedIds: taxiIds.filter((id) => statusById.get(id) === "ROSTER") };
+  }
+
+  const refreshedPool = getPlayerRows({
+    ...refreshed, starters: refreshed.franchise, byeTeams: getByeTeams(refreshed.byes), now,
+  });
+  const refreshedProposal = optimizeLineup({ players: refreshedPool, rules, currentStarterIds });
+  const stillTaxi = taxiIdsInProposal(refreshedProposal);
+  if (stillTaxi.length) {
+    throw new Error(`Optimizer selected unpromoted Taxi player(s) after promotion read-back: ${stillTaxi.join(", ")}`);
+  }
+  return { snapshot: refreshed, proposal: refreshedProposal, promotedIds: taxiIds };
+}
+
 async function processInitialLineup(league, cookie, snapshot, pool, firstKickoff, base) {
   if (!isInitialLineupRunDue(now, firstKickoff)) {
     return { ...base, status: "idle", message: "Not the 6:00 a.m. ET first-game-day safety-net window." };
@@ -89,17 +131,26 @@ async function processInitialLineup(league, cookie, snapshot, pool, firstKickoff
     byeTeams: getByeTeams(fresh.byes),
     now,
   });
-  const freshProposal = optimizeLineup({ players: freshPool, rules: parseRules(fresh.leagueData.league) });
-  const finalIds = freshProposal.players.map((player) => player.id).sort();
+  const freshRules = parseRules(fresh.leagueData.league);
+  const freshProposal = optimizeLineup({ players: freshPool, rules: freshRules });
+  const prepared = await promoteTaxiSelections({ league, cookie, snapshot: fresh, proposal: freshProposal, rules: freshRules });
+  const finalIds = prepared.proposal.players.map((player) => player.id).sort();
+  const finalNames = prepared.proposal.players.slice()
+    .sort((a, b) => a.position.localeCompare(b.position) || b.projection - a.projection)
+    .map((player) => `${player.name} ${player.team} ${player.position} (${projectionLabel(player)})`).join("; ");
+  const promotedNames = prepared.promotedIds.map((id) => freshPool.find((player) => player.id === id)?.name || id);
+  const promotionNote = prepared.promotedIds.length
+    ? `\n\nPromoted from Taxi to Active before lineup submission: ${promotedNames.join(", ")}.`
+    : "";
   await submitLineup({ season, webHost: league.webHost, leagueId: league.leagueId, week: snapshot.week, starterIds: finalIds, cookie });
   const verified = await readLeague(league, cookie);
   const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
   if (verifiedIds.join(",") !== finalIds.join(",")) throw new Error("MFL read-back did not match automatic initial lineup");
-  event(league.key, "INITIAL LINEUP SUBMITTED", names);
+  event(league.key, "INITIAL LINEUP SUBMITTED", finalNames);
   await sendMflEmail({
     season, webHost: league.webHost, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
     subject: `[${league.key} Bears] Automatic Week ${snapshot.week} lineup submitted`,
-    message: `No manual Week ${snapshot.week} lineup submission was recorded by 6:00 a.m. ET on the first NFL game day.\n\nThe lineup guardian submitted and verified the highest-projected legal lineup containing no MFL O, IR, H, S, or bye players.\n\n${names}`,
+    message: `No manual Week ${snapshot.week} lineup submission was recorded by 6:00 a.m. ET on the first NFL game day.\n\nThe lineup guardian submitted and verified the highest-projected legal lineup containing no MFL O, IR, H, S, or bye players.${promotionNote}\n\n${finalNames}`,
   });
   return { ...base, status: "changed", message: `Automatic initial lineup submitted and verified for Week ${snapshot.week}.` };
 }
@@ -185,10 +236,15 @@ async function processLeague(league, cookie) {
     lockedStarterIds: freshLockedIds,
     currentStarterIds: freshStarters,
   });
-  const finalIds = freshProposal.players.map((player) => player.id).sort();
-  const finalValidation = validateLineup(freshProposal.players, parseRules(fresh.leagueData.league));
+  const prepared = await promoteTaxiSelections({
+    league, cookie, snapshot: fresh, proposal: freshProposal,
+    rules: parseRules(fresh.leagueData.league), currentStarterIds: freshStarters,
+  });
+  const finalIds = prepared.proposal.players.map((player) => player.id).sort();
+  const finalValidation = validateLineup(prepared.proposal.players, parseRules(prepared.snapshot.leagueData.league));
   if (!finalValidation.valid) throw new Error(`Fresh optimizer produced an illegal lineup: ${finalValidation.errors.join("; ")}`);
   const finalDetail = describe(freshPool, finalIds);
+  const promotedNames = prepared.promotedIds.map((id) => freshPool.find((player) => player.id === id)?.name || id);
   await submitLineup({ season, webHost: league.webHost, leagueId: league.leagueId, week: snapshot.week, starterIds: finalIds, cookie });
   const verified = await readLeague(league, cookie);
   const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
@@ -209,7 +265,7 @@ async function processLeague(league, cookie) {
   await sendMflEmail({
     season, webHost: league.webHost, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
     subject: `[${league.key} Bears] Automatic lineup protection applied`,
-    message: `The lineup guardian made and verified this change for Week ${snapshot.week}:\n\n${finalDetail}\n\nThe resulting 21-player lineup passed every league position and group constraint.`,
+    message: `The lineup guardian made and verified this change for Week ${snapshot.week}:\n\n${finalDetail}${prepared.promotedIds.length ? `\n\nPromoted from Taxi to Active before lineup submission: ${promotedNames.join(", ")}.` : ""}\n\nThe resulting 21-player lineup passed every league position and group constraint.`,
   });
   return { ...base, status: "changed", message: finalDetail };
 }

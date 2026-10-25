@@ -37,10 +37,15 @@ test("bye starters are unavailable even without an injury designation", () => {
   assert.equal(rice.eligible, false);
 });
 
-test("IR and taxi players cannot be selected as replacements", () => {
-  for (const rosterStatus of ["INJURED_RESERVE", "TAXI_SQUAD"]) {
-    const data = fixture({ injury: "", starter: false, rosterStatus });
-    const [rice] = getPlayerRows({ ...data, kickoffs: mapKickoffs(data.schedule), byeTeams: getByeTeams(data.byes) });
-    assert.equal(rice.eligible, false);
-  }
+test("taxi players can be selected as replacements", () => {
+  const data = fixture({ injury: "", starter: false, rosterStatus: "TAXI_SQUAD" });
+  const [rice] = getPlayerRows({ ...data, kickoffs: mapKickoffs(data.schedule), byeTeams: getByeTeams(data.byes) });
+  assert.equal(rice.eligible, true);
+  assert.equal(rice.rosterStatus, "TAXI_SQUAD");
+});
+
+test("IR players cannot be selected as replacements", () => {
+  const data = fixture({ injury: "", starter: false, rosterStatus: "INJURED_RESERVE" });
+  const [rice] = getPlayerRows({ ...data, kickoffs: mapKickoffs(data.schedule), byeTeams: getByeTeams(data.byes) });
+  assert.equal(rice.eligible, false);
 });
