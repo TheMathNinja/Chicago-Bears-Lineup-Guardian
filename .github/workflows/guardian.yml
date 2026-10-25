@@ -17,8 +17,9 @@ on:
         type: string
         default: ''
   schedule:
-    # Native Actions timing is a ten-minute fallback for the five-minute Apps Script scheduler.
-    - cron: "*/10 * * * 4,5,6,0,1"
+    # Native Actions timing is a ten-minute, all-days fallback for the five-minute
+    # Apps Script scheduler. Unusual Wednesday games must be protected too.
+    - cron: "*/10 * * * *"
 
 concurrency:
   group: lineup-guardian-monitor
@@ -51,7 +52,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: npm test
+      - if: github.event_name != 'schedule'
+        run: npm test
       - name: Check configuration
         id: configured
         shell: bash

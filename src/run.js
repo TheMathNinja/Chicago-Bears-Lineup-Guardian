@@ -2,8 +2,9 @@ import fs from "node:fs";
 import { dryRun, loadLeagues, lookaheadMinutes, requireCredentials, season } from "./config.js";
 import { writeDashboard } from "./dashboard.js";
 import { optimizeLineup, parseRules, validateLineup } from "./lineup-rules.js";
+import { getByeTeams, getPlayerRows, mapKickoffs } from "./lineup-data.js";
 import { exportJson, login, requestText, sendMflEmail, submitLineup, verifyLogin } from "./mfl.js";
-import { isUnavailable, normalizeStatus, rows } from "./normalize.js";
+import { isUnavailable, rows } from "./normalize.js";
 import { isInitialLineupRunDue, lineupSubmissionStatus } from "./submission-status.js";
 
 const now = new Date(process.env.NOW || Date.now());
@@ -11,6 +12,10 @@ const statePath = "data/state.json";
 fs.mkdirSync("data", { recursive: true });
 const state = fs.existsSync(statePath) ? JSON.parse(fs.readFileSync(statePath, "utf8")) : { events: [], leagues: [] };
 const runMode = process.env.RUN_MODE || "monitor";
+
+function projectionLabel(player) {
+  return Number.isFinite(player.projection) ? player.projection.toFixed(1) : "projection unavailable";
+}
 
 function event(league, action, detail) {
   state.events.push({ time: now.toISOString(), league, action, detail });
@@ -22,39 +27,6 @@ function findFranchise(weeklyResults, franchiseId) {
     for (const franchise of rows(matchup.franchise)) if (franchise.id === franchiseId) return franchise;
   }
   throw new Error(`Franchise ${franchiseId} is absent from weekly results`);
-}
-
-function mapKickoffs(schedule) {
-  const map = new Map();
-  for (const matchup of rows(schedule.nflSchedule?.matchup)) {
-    for (const team of rows(matchup.team)) map.set(team.id, new Date(Number(matchup.kickoff) * 1000));
-  }
-  return map;
-}
-
-function getByeTeams(byes) {
-  return new Set(rows(byes.nflByeWeeks?.team).map((team) => team.id));
-}
-
-function getPlayerRows(players, roster, injuries, projections, starters, kickoffs, byeTeams) {
-  const playerMap = new Map(rows(players.players?.player).map((p) => [p.id, p]));
-  const injuryMap = new Map(rows(injuries.injuries?.injury).map((i) => [i.id, i.status]));
-  const projectionMap = new Map(rows(projections.projectedScores?.playerScore).map((p) => [p.id, Number(p.score)]));
-  const starterIds = new Set(String(starters.starters || "").split(",").filter(Boolean));
-  return rows(roster.rosters?.franchise?.player).map((r) => {
-    const p = playerMap.get(r.id) || {};
-    const injuryStatus = normalizeStatus(injuryMap.get(r.id));
-    const bye = byeTeams.has(p.team);
-    const kickoff = kickoffs.get(p.team);
-    const activeRoster = r.status === "ROSTER";
-    const gameLocked = kickoff && kickoff <= now;
-    return {
-      id: r.id, name: p.name || r.id, team: p.team || "", position: p.position || "",
-      projection: projectionMap.get(r.id) ?? Number.NEGATIVE_INFINITY,
-      injuryStatus, bye, kickoff, starter: starterIds.has(r.id), gameLocked,
-      eligible: activeRoster && !gameLocked && !isUnavailable({ injuryStatus, bye }),
-    };
-  });
 }
 
 function isInWindow(kickoff) {
@@ -76,6 +48,7 @@ async function readLeague(league, cookie) {
   ]);
   const franchise = findFranchise(weeklyResults, league.franchiseId);
   const kickoffs = mapKickoffs(schedule);
+  if (!kickoffs.size) throw new Error(`MFL returned no NFL kickoff data for Week ${week}`);
   return { leagueData, roster, week, franchise, players, injuries, projections, schedule, byes, kickoffs };
 }
 
@@ -100,7 +73,7 @@ async function processInitialLineup(league, cookie, snapshot, pool, firstKickoff
   if (!validation.valid) throw new Error(`Initial optimizer produced an illegal lineup: ${validation.errors.join("; ")}`);
   const proposedIds = proposal.players.map((p) => p.id).sort();
   const names = proposal.players.slice().sort((a, b) => a.position.localeCompare(b.position) || b.projection - a.projection)
-    .map((p) => `${p.name} ${p.team} ${p.position} (${p.projection.toFixed(1)})`).join("; ");
+    .map((p) => `${p.name} ${p.team} ${p.position} (${projectionLabel(p)})`).join("; ");
   if (dryRun) {
     event(league.key, "INITIAL LINEUP DRY RUN", names);
     return { ...base, status: "changed", message: `Dry run would submit: ${names}` };
@@ -110,10 +83,18 @@ async function processInitialLineup(league, cookie, snapshot, pool, firstKickoff
   if (fresh.week !== snapshot.week || freshStatus.status !== "not_submitted") {
     throw new Error("Week or submission status changed during evaluation; refusing automatic initial submission");
   }
-  await submitLineup({ season, webHost: league.webHost, leagueId: league.leagueId, week: snapshot.week, starterIds: proposedIds, cookie });
+  const freshPool = getPlayerRows({
+    ...fresh,
+    starters: fresh.franchise,
+    byeTeams: getByeTeams(fresh.byes),
+    now,
+  });
+  const freshProposal = optimizeLineup({ players: freshPool, rules: parseRules(fresh.leagueData.league) });
+  const finalIds = freshProposal.players.map((player) => player.id).sort();
+  await submitLineup({ season, webHost: league.webHost, leagueId: league.leagueId, week: snapshot.week, starterIds: finalIds, cookie });
   const verified = await readLeague(league, cookie);
   const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
-  if (verifiedIds.join(",") !== proposedIds.join(",")) throw new Error("MFL read-back did not match automatic initial lineup");
+  if (verifiedIds.join(",") !== finalIds.join(",")) throw new Error("MFL read-back did not match automatic initial lineup");
   event(league.key, "INITIAL LINEUP SUBMITTED", names);
   await sendMflEmail({
     season, webHost: league.webHost, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
@@ -126,13 +107,16 @@ async function processInitialLineup(league, cookie, snapshot, pool, firstKickoff
 async function processLeague(league, cookie) {
   const snapshot = await readLeague(league, cookie);
   const byeTeams = getByeTeams(snapshot.byes);
-  const pool = getPlayerRows(snapshot.players, snapshot.roster, snapshot.injuries, snapshot.projections, snapshot.franchise, snapshot.kickoffs, byeTeams);
+  const pool = getPlayerRows({ ...snapshot, starters: snapshot.franchise, byeTeams, now });
   const allKickoffs = [...snapshot.kickoffs.values()].sort((a, b) => a - b);
   const nextKickoff = allKickoffs.find((date) => date > now);
   const inAnyRosterWindow = pool.some((p) => p.kickoff && isInWindow(p.kickoff));
   const firstKickoffWindow = allKickoffs.length > 0 && isInWindow(allKickoffs[0]);
   const unavailableStarters = pool.filter((p) => p.starter && isUnavailable(p));
-  const dueUnavailable = unavailableStarters.filter((p) => (p.bye && firstKickoffWindow) || (p.kickoff && isInWindow(p.kickoff)));
+  const dueUnavailable = unavailableStarters.filter((p) =>
+    (p.bye && firstKickoffWindow) ||
+    (p.kickoff && isInWindow(p.kickoff)) ||
+    (!p.bye && !p.kickoff && (inAnyRosterWindow || firstKickoffWindow)));
   const base = { key: league.key, week: snapshot.week, checkedAt: now.toISOString(), nextKickoff: nextKickoff?.toISOString() };
 
   if (runMode === "initial") return processInitialLineup(league, cookie, snapshot, pool, allKickoffs[0], base);
@@ -170,9 +154,12 @@ async function processLeague(league, cookie) {
   const validation = validateLineup(proposal.players, rules);
   if (!validation.valid) throw new Error(`Optimizer produced an illegal lineup: ${validation.errors.join("; ")}`);
   const proposedIds = proposal.players.map((p) => p.id).sort();
-  const removed = pool.filter((p) => p.starter && !proposedIds.includes(p.id));
-  const added = pool.filter((p) => !p.starter && proposedIds.includes(p.id));
-  const detail = `${removed.map((p) => `${p.name} ${p.team} ${p.position} (${p.bye ? "BYE" : p.injuryStatus})`).join(", ")} -> ${added.map((p) => `${p.name} ${p.team} ${p.position} (${p.projection.toFixed(1)})`).join(", ")}`;
+  const describe = (sourcePool, ids) => {
+    const removed = sourcePool.filter((player) => player.starter && !ids.includes(player.id));
+    const added = sourcePool.filter((player) => !player.starter && ids.includes(player.id));
+    return `${removed.map((player) => `${player.name} ${player.team} ${player.position} (${player.bye ? "BYE" : player.injuryStatus})`).join(", ")} -> ${added.map((player) => `${player.name} ${player.team} ${player.position} (${projectionLabel(player)})`).join(", ")}`;
+  };
+  const detail = describe(pool, proposedIds);
   if (dryRun) {
     event(league.key, "DRY RUN", detail);
     return { ...base, status: "changed", message: `Dry run: ${detail}` };
@@ -185,17 +172,46 @@ async function processLeague(league, cookie) {
   if (fresh.week !== snapshot.week || freshStarters.join(",") !== currentStarterIds.sort().join(",")) {
     throw new Error("Lineup or week changed during evaluation; refusing stale write");
   }
-  await submitLineup({ season, webHost: league.webHost, leagueId: league.leagueId, week: snapshot.week, starterIds: proposedIds, cookie });
+  const freshByeTeams = getByeTeams(fresh.byes);
+  const freshPool = getPlayerRows({ ...fresh, starters: fresh.franchise, byeTeams: freshByeTeams, now });
+  const freshUnavailable = freshPool.filter((player) => player.starter && isUnavailable(player) && !player.gameLocked);
+  if (!freshUnavailable.length) {
+    return { ...base, status: "ok", message: "Fresh pre-write check found no remaining unlocked inactive starter." };
+  }
+  const freshLockedIds = freshPool.filter((player) => player.starter && player.gameLocked).map((player) => player.id);
+  const freshProposal = optimizeLineup({
+    players: freshPool,
+    rules: parseRules(fresh.leagueData.league),
+    lockedStarterIds: freshLockedIds,
+    currentStarterIds: freshStarters,
+  });
+  const finalIds = freshProposal.players.map((player) => player.id).sort();
+  const finalValidation = validateLineup(freshProposal.players, parseRules(fresh.leagueData.league));
+  if (!finalValidation.valid) throw new Error(`Fresh optimizer produced an illegal lineup: ${finalValidation.errors.join("; ")}`);
+  const finalDetail = describe(freshPool, finalIds);
+  await submitLineup({ season, webHost: league.webHost, leagueId: league.leagueId, week: snapshot.week, starterIds: finalIds, cookie });
   const verified = await readLeague(league, cookie);
   const verifiedIds = String(verified.franchise.starters || "").split(",").filter(Boolean).sort();
-  if (verifiedIds.join(",") !== proposedIds.join(",")) throw new Error("MFL read-back did not match submitted lineup");
-  event(league.key, "LINEUP UPDATED", detail);
+  if (verifiedIds.join(",") !== finalIds.join(",")) throw new Error("MFL read-back did not match submitted lineup");
+  const verifiedPool = getPlayerRows({
+    ...verified,
+    starters: verified.franchise,
+    byeTeams: getByeTeams(verified.byes),
+    now,
+  });
+  const badReadBack = verifiedPool.filter((player) =>
+    player.starter && !player.gameLocked && isUnavailable(player));
+  if (badReadBack.length) {
+    throw new Error(`MFL read-back still contains unlocked inactive starter(s): ${badReadBack.map((player) =>
+      `${player.name} (${player.bye ? "BYE" : player.injuryStatus})`).join(", ")}`);
+  }
+  event(league.key, "LINEUP UPDATED", finalDetail);
   await sendMflEmail({
     season, webHost: league.webHost, leagueId: league.leagueId, franchiseId: league.franchiseId, cookie,
     subject: `[${league.key} Bears] Automatic lineup protection applied`,
-    message: `The lineup guardian made and verified this change for Week ${snapshot.week}:\n\n${detail}\n\nThe resulting 21-player lineup passed every league position and group constraint.`,
+    message: `The lineup guardian made and verified this change for Week ${snapshot.week}:\n\n${finalDetail}\n\nThe resulting 21-player lineup passed every league position and group constraint.`,
   });
-  return { ...base, status: "changed", message: detail };
+  return { ...base, status: "changed", message: finalDetail };
 }
 
 async function main() {

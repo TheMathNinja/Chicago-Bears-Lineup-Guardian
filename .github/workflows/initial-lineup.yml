@@ -34,51 +34,15 @@ jobs:
       RUN_MODE: initial
       LIVE_LINEUP_WRITES: ${{ github.event_name == 'workflow_dispatch' && inputs.live && 'true' || github.event_name == 'schedule' && vars.LIVE_LINEUP_WRITES || 'false' }}
     steps:
-      - name: Suppress overlapping native backup run
-        id: gate
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          if [ "${{ github.event_name }}" != "schedule" ]; then
-            echo "run=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          cutoff="$(date -u -d '8 minutes ago' +%Y-%m-%dT%H:%M:%SZ)"
-          recent="$(gh run list --repo "$GITHUB_REPOSITORY" --workflow initial-lineup.yml --event workflow_dispatch --limit 10 \
-            --json createdAt,status --jq "[.[] | select(.createdAt >= \"${cutoff}\" and (.status == \"queued\" or .status == \"in_progress\" or .status == \"completed\"))] | length")"
-          if [ "${recent}" -gt 0 ]; then
-            echo "run=false" >> "$GITHUB_OUTPUT"
-            echo "Apps Script already dispatched the initial-lineup check."
-          else
-            schedule="$(curl --fail --silent --show-error --max-time 20 \
-              'https://api.myfantasyleague.com/2026/export?TYPE=nflSchedule&JSON=1' || true)"
-            first_kickoff="$(jq -r '[.nflSchedule.matchup // []] | flatten | map(.kickoff | tonumber) | min // empty' \
-              <<<"$schedule" 2>/dev/null || true)"
-            today_et="$(TZ=America/New_York date +%F)"
-            hour_et="$(TZ=America/New_York date +%H)"
-            first_date_et=""
-            if [ -n "$first_kickoff" ]; then
-              first_date_et="$(TZ=America/New_York date -d "@$first_kickoff" +%F)"
-            fi
-            if [ -n "$first_date_et" ] && { [ "$today_et" != "$first_date_et" ] || [ "$hour_et" != "06" ]; }; then
-              echo "run=false" >> "$GITHUB_OUTPUT"
-              echo "Not the 6 a.m. ET hour on the first NFL game day; native backup is not needed."
-            else
-              echo "run=true" >> "$GITHUB_OUTPUT"
-              echo "No recent Apps Script dispatch in the safety-net window; native backup will run."
-            fi
-          fi
-      - if: steps.gate.outputs.run == 'true'
-        uses: actions/checkout@v5
-      - if: steps.gate.outputs.run == 'true'
-        uses: actions/setup-node@v5
+      # Always let the worker read the active roster week and apply its DST-safe
+      # first-game-day gate. Scheduler-level week guesses caused silent skips.
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - if: steps.gate.outputs.run == 'true'
+      - if: github.event_name != 'schedule'
         run: npm test
       - name: Check configuration
-        if: steps.gate.outputs.run == 'true'
         id: configured
         shell: bash
         run: |
@@ -88,8 +52,8 @@ jobs:
             echo "ready=false" >> "$GITHUB_OUTPUT"
             echo "Initial lineup safety net is not credentialed yet; safely skipping."
           fi
-      - if: steps.gate.outputs.run == 'true' && steps.configured.outputs.ready == 'true'
+      - if: steps.configured.outputs.ready == 'true'
         run: npm run check
       - name: Commit audit state
-        if: steps.gate.outputs.run == 'true' && steps.configured.outputs.ready == 'true'
+        if: steps.configured.outputs.ready == 'true'
         run: bash scripts/publish_audit_state.sh "Update initial-lineup audit"

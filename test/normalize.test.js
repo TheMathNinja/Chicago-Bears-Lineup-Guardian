@@ -10,6 +10,8 @@ test("normalizes verbose MFL unavailable statuses", () => {
     ["Holdout", "H"],
     ["IR-PUP", "IR"],
     ["Injured Reserve", "IR"],
+    ["I", "I"],
+    ["(I)", "I"],
   ];
   for (const [raw, expected] of cases) {
     const normalized = normalizeStatus(raw);

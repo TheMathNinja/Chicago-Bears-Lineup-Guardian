@@ -65,8 +65,9 @@ export function optimizeLineup({ players, rules, lockedStarterIds = [], currentS
   const lockedIds = new Set(lockedStarterIds);
   // Locked starters must survive a later submission even though their games
   // have begun and they are no longer selectable as new starters.
-  const eligible = players.filter((p) =>
-    (p.eligible && Number.isFinite(p.projection)) || lockedIds.has(p.id));
+  // Projection outages must not strand an inactive starter. Players without a
+  // score remain legal fallback candidates, ranked behind every projected one.
+  const eligible = players.filter((p) => p.eligible || lockedIds.has(p.id));
   const lockedMissing = [...lockedIds].filter((id) => !players.some((p) => p.id === id));
   if (lockedMissing.length) throw new Error(`Locked starters are missing or ineligible: ${lockedMissing.join(", ")}`);
 
@@ -80,8 +81,8 @@ export function optimizeLineup({ players, rules, lockedStarterIds = [], currentS
         const offense = combined.filter((p) => GROUPS.offense.has(p.position)).length;
         const defense = combined.filter((p) => GROUPS.defense.has(p.position)).length;
         if (combined.length <= rules.total && offense <= rules.offense && defense <= rules.defense) {
-          next.push({ players: combined, score: state.score + choice.reduce((s, p) =>
-            s + (Number.isFinite(p.projection) ? p.projection : 0), 0) });
+          next.push({ players: combined, score: state.score + choice.reduce((sum, player) =>
+            sum + (Number.isFinite(player.projection) ? player.projection : -1_000_000), 0) });
         }
       }
     }

@@ -1,4 +1,4 @@
-const ILLEGAL = new Set(["O", "IR", "IR-R", "IR-D", "IR-PUP", "PUP", "H", "S"]);
+const ILLEGAL = new Set(["O", "I", "IR", "IR-R", "IR-D", "IR-PUP", "PUP", "H", "S"]);
 
 export function normalizeStatus(value) {
   const status = String(value || "").trim().toUpperCase().replace(/[()]/g, "");
