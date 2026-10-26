@@ -9,19 +9,24 @@ const LINEUP_GUARDIAN = {
   alertEmail: 'fili.mikey@gmail.com',
   season: 2026,
   lookaheadMinutes: 90,
-  scheduleCacheMinutes: 360
+  scheduleCacheMinutes: 5,
+  idleScheduleCacheMinutes: 30
 };
 
 function runLineupGuardianScheduler() {
+  console.log('Guardian scheduler: started');
   const lock = LockService.getScriptLock();
+  console.log('Guardian scheduler: acquiring execution lock');
   if (!lock.tryLock(1000)) return;
   try {
     const now = new Date();
+    console.log('Guardian scheduler: reading properties');
     const props = PropertiesService.getScriptProperties();
     const slot = String(Math.floor(now.getTime() / 300000));
     if (props.getProperty('LINEUP_GUARDIAN_LAST_SLOT') === slot) return;
 
     const due = lineupGuardianDue_(now, props);
+    console.log('Guardian scheduler: due=' + JSON.stringify(due));
     if (!due.monitor && !due.initial) {
       props.setProperties({
         LINEUP_GUARDIAN_LAST_SLOT: slot,
@@ -79,7 +84,16 @@ function lineupGuardianCachedKickoffs_(props) {
 function lineupGuardianFetchKickoffs_(now, props) {
   const cached = lineupGuardianCachedKickoffs_(props);
   const fetchedAt = props ? Number(props.getProperty('LINEUP_GUARDIAN_KICKOFFS_FETCHED_AT') || 0) : 0;
-  const cacheMs = LINEUP_GUARDIAN.scheduleCacheMinutes * 60 * 1000;
+  // Keep the precision cadence near games; avoid unnecessary overnight HTTP calls.
+  const nearKickoff = cached.some(function(kickoff) {
+    const delta = kickoff - now.getTime();
+    return delta >= 0 && delta <= 3 * 60 * 60 * 1000;
+  });
+  const clock = Utilities.formatDate(now, 'America/New_York', 'HH:mm');
+  const initialCheckHour = clock >= '06:00' && clock < '07:00';
+  const cacheMinutes = nearKickoff || initialCheckHour ? LINEUP_GUARDIAN.scheduleCacheMinutes :
+    LINEUP_GUARDIAN.idleScheduleCacheMinutes;
+  const cacheMs = cacheMinutes * 60 * 1000;
   if (cached.length && fetchedAt > 0 && now.getTime() - fetchedAt < cacheMs) {
     return {kickoffs: cached, source: 'cached'};
   }
@@ -89,6 +103,7 @@ function lineupGuardianFetchKickoffs_(now, props) {
     // MFL's unqualified nflSchedule endpoint can roll to the next fantasy week
     // before the current Sunday's games. The Bears roster response carries the
     // active lineup week, so use it to qualify the schedule request explicitly.
+    console.log('Guardian scheduler: fetching active roster week');
     const rosterResponse = UrlFetchApp.fetch(
       'https://api.myfantasyleague.com/' + LINEUP_GUARDIAN.season +
         '/export?TYPE=rosters&L=60206&FRANCHISE=0005&JSON=1',
@@ -99,6 +114,7 @@ function lineupGuardianFetchKickoffs_(now, props) {
     const currentWeek = Number(rosterPayload.rosters && rosterPayload.rosters.franchise &&
       rosterPayload.rosters.franchise.week);
     if (!Number.isFinite(currentWeek)) throw new Error('ADL roster response omitted the current week');
+    console.log('Guardian scheduler: fetching NFL schedule W=' + currentWeek);
     response = UrlFetchApp.fetch(
       'https://api.myfantasyleague.com/' + LINEUP_GUARDIAN.season +
         '/export?TYPE=nflSchedule&JSON=1&W=' + currentWeek,
@@ -164,6 +180,7 @@ function lineupGuardianDue_(now, props) {
 }
 
 function dispatchLineupGuardian_(workflow, token, props) {
+  console.log('Guardian scheduler: dispatching ' + workflow);
   const startedAt = new Date();
   const dispatchId = 'gas-' + Utilities.formatDate(startedAt, 'UTC', 'yyyyMMdd-HHmmss') +
     '-' + workflow.replace(/[^A-Za-z0-9]/g, '-');

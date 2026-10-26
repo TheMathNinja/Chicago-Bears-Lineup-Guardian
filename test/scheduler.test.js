@@ -58,7 +58,7 @@ test("precision scheduler is active only inside a real 90-minute kickoff window"
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-22T22:45:00Z"), context.testProperties).monitor, true);
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-22T22:44:59Z"), context.testProperties).monitor, false);
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-23T00:15:01Z"), context.testProperties).monitor, false);
-  assert.equal(context.fetchCount(), 2);
+  assert.equal(context.fetchCount(), 4);
 });
 
 test("initial-lineup dispatch is limited to 6 a.m. ET on first game day", () => {
@@ -147,4 +147,20 @@ test("Week 8 actual kickoff groups and first-game safety net survive the Novembe
   const context = schedulerContext(kickoffs.map((time) => time / 1000), { week: 8 });
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-29T10:05:00Z"), context.testProperties).initial, true);
   assert.equal(context.lineupGuardianDue_(new Date("2026-10-29T11:05:00Z"), context.testProperties).initial, false);
+});
+
+test("overnight cached schedule needs no HTTP requests while every game window retains five-minute refresh", () => {
+  const kickoff = Date.parse("2026-11-03T01:15:00Z");
+  const overnight = new Date("2026-11-02T08:29:42Z");
+  const props = (time) => ({
+    LINEUP_GUARDIAN_KICKOFFS: JSON.stringify([kickoff]),
+    LINEUP_GUARDIAN_KICKOFFS_FETCHED_AT: String(time - 10 * 60000),
+  });
+  const quiet = schedulerContext([], { fetchError: "must not call HTTP", properties: props(overnight.getTime()) });
+  assert.equal(quiet.lineupGuardianDue_(overnight, quiet.testProperties).monitor, false);
+  assert.equal(quiet.fetchCount(), 0);
+  const gameWindow = new Date(kickoff - 60 * 60000);
+  const active = schedulerContext([kickoff / 1000], { properties: props(gameWindow.getTime()) });
+  assert.equal(active.lineupGuardianDue_(gameWindow, active.testProperties).monitor, true);
+  assert.equal(active.fetchCount(), 2);
 });
