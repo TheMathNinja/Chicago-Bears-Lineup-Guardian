@@ -17,7 +17,7 @@ on:
     - cron: "4 10,11 * 9-12 0-6"
 
 concurrency:
-  group: lineup-guardian-initial
+  group: lineup-guardian-writes
   cancel-in-progress: false
 
 permissions:

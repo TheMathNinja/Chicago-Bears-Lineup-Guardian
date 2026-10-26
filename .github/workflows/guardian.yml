@@ -22,7 +22,7 @@ on:
     - cron: "*/10 * * * *"
 
 concurrency:
-  group: lineup-guardian-monitor
+  group: lineup-guardian-writes
   cancel-in-progress: false
 
 permissions:
