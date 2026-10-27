@@ -76,15 +76,17 @@
   "leagues": [
     {
       "key": "ADL",
-      "week": 7,
-      "checkedAt": "2026-10-27T01:18:26.451Z",
+      "week": 8,
+      "checkedAt": "2026-10-27T06:26:40.253Z",
+      "nextKickoff": "2026-10-30T00:15:00.000Z",
       "status": "idle",
       "message": "Outside the 90-minute monitoring window."
     },
     {
       "key": "FAFL",
-      "week": 7,
-      "checkedAt": "2026-10-27T01:18:26.451Z",
+      "week": 8,
+      "checkedAt": "2026-10-27T06:26:40.253Z",
+      "nextKickoff": "2026-10-30T00:15:00.000Z",
       "status": "idle",
       "message": "Outside the 90-minute monitoring window."
     }
