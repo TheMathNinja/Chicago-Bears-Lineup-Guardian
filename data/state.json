@@ -77,18 +77,18 @@
     {
       "key": "ADL",
       "week": 8,
-      "checkedAt": "2026-10-28T16:32:44.140Z",
+      "checkedAt": "2026-10-28T19:47:25.006Z",
       "nextKickoff": "2026-10-30T00:15:00.000Z",
       "status": "idle",
-      "message": "Not the 6:00 a.m. ET first-game-day safety-net window."
+      "message": "Outside the 90-minute monitoring window."
     },
     {
       "key": "FAFL",
       "week": 8,
-      "checkedAt": "2026-10-28T16:32:44.140Z",
+      "checkedAt": "2026-10-28T19:47:25.006Z",
       "nextKickoff": "2026-10-30T00:15:00.000Z",
       "status": "idle",
-      "message": "Not the 6:00 a.m. ET first-game-day safety-net window."
+      "message": "Outside the 90-minute monitoring window."
     }
   ]
 }
